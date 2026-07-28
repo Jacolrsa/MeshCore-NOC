@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="500" viewBox="0 0 1600 500" role="img" aria-labelledby="title description">
+  <title id="title">MeshCore NOC</title>
+  <desc id="description">Dark technical banner showing connected repeater nodes, telemetry traces, and the MeshCore NOC product name.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1015"/>
+      <stop offset="0.55" stop-color="#101820"/>
+      <stop offset="1" stop-color="#132330"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#36c96b"/>
+      <stop offset="1" stop-color="#4da3ff"/>
+    </linearGradient>
+    <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+      <path d="M50 0H0V50" fill="none" stroke="#aab5bf" stroke-opacity="0.07"/>
+    </pattern>
+    <filter id="soft-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="500" rx="24" fill="url(#background)"/>
+  <rect width="1600" height="500" rx="24" fill="url(#grid)"/>
+  <path d="M0 405 C125 388 165 425 278 398 S470 347 575 375 S770 440 900 390 S1100 320 1220 350 S1435 410 1600 360"
+        fill="none" stroke="#4da3ff" stroke-opacity="0.18" stroke-width="3"/>
+  <path d="M0 432 C105 425 190 450 300 422 S490 397 600 418 S810 457 930 423 S1130 370 1250 398 S1450 447 1600 410"
+        fill="none" stroke="#36c96b" stroke-opacity="0.14" stroke-width="2"/>
+
+  <g transform="translate(105 75)">
+    <path d="M120 180 L245 90 L370 185 L500 55" fill="none" stroke="url(#accent)" stroke-opacity="0.52" stroke-width="3"/>
+    <path d="M120 180 L280 270 L370 185 L520 285" fill="none" stroke="#4da3ff" stroke-opacity="0.34" stroke-width="2"/>
+    <path d="M245 90 L280 270" fill="none" stroke="#36c96b" stroke-opacity="0.25" stroke-width="2"/>
+
+    <g fill="#101820" stroke-width="4" filter="url(#soft-glow)">
+      <circle cx="120" cy="180" r="26" stroke="#36c96b"/>
+      <circle cx="245" cy="90" r="18" stroke="#4da3ff"/>
+      <circle cx="280" cy="270" r="18" stroke="#f6c344"/>
+      <circle cx="370" cy="185" r="24" stroke="#36c96b"/>
+      <circle cx="500" cy="55" r="17" stroke="#4da3ff"/>
+      <circle cx="520" cy="285" r="20" stroke="#ff8b3d"/>
+    </g>
+
+    <g fill="#f3f6f8">
+      <circle cx="120" cy="180" r="6"/>
+      <circle cx="245" cy="90" r="5"/>
+      <circle cx="280" cy="270" r="5"/>
+      <circle cx="370" cy="185" r="6"/>
+      <circle cx="500" cy="55" r="5"/>
+      <circle cx="520" cy="285" r="5"/>
+    </g>
+
+    <g fill="none" stroke="#4da3ff" stroke-linecap="round" stroke-opacity="0.65">
+      <path d="M100 145 Q120 124 140 145"/>
+      <path d="M91 132 Q120 101 149 132"/>
+      <path d="M350 150 Q370 129 390 150"/>
+      <path d="M341 137 Q370 106 399 137"/>
+    </g>
+  </g>
+
+  <g transform="translate(735 112)">
+    <rect x="0" y="0" width="8" height="272" rx="4" fill="url(#accent)"/>
+    <text x="46" y="100" fill="#f3f6f8" font-family="Arial, Helvetica, sans-serif" font-size="82" font-weight="700" letter-spacing="2">MeshCore NOC</text>
+    <text x="49" y="155" fill="#aab5bf" font-family="Arial, Helvetica, sans-serif" font-size="25" letter-spacing="0.6">Professional Network Operations Centre</text>
+    <text x="49" y="190" fill="#aab5bf" font-family="Arial, Helvetica, sans-serif" font-size="25" letter-spacing="0.6">for MeshCore &amp; Home Assistant</text>
+
+    <g transform="translate(49 236)">
+      <rect x="0" y="0" width="420" height="76" rx="12" fill="#1a2128" stroke="#ffffff" stroke-opacity="0.10"/>
+      <circle cx="37" cy="38" r="8" fill="#36c96b"/>
+      <path d="M72 48 L105 29 L137 42 L169 20 L202 34 L234 16 L267 39 L301 27 L336 43 L374 22"
+            fill="none" stroke="#4da3ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M72 57 H374" stroke="#aab5bf" stroke-opacity="0.18"/>
+    </g>
+  </g>
+
+  <rect x="1.5" y="1.5" width="1597" height="497" rx="22.5" fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="3"/>
+</svg>

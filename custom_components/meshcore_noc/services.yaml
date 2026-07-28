@@ -1,0 +1,16 @@
+check_clock:
+  name: Check repeater clock
+  description: Run one manual read-only clock check for a managed MeshCore repeater.
+  fields:
+    stable_id:
+      name: Managed repeater ID
+      description: NOC stable identifier of one currently managed, addressable repeater. Friendly names are display-only; the runtime UI supplies valid choices.
+      required: true
+      selector:
+        text:
+check_all_clocks:
+  name: Check all clocks
+  description: Start one serialized clock check for every managed, addressable repeater.
+cancel_clock_check:
+  name: Cancel clock check
+  description: Stop the active fleet run before dispatching its next repeater.

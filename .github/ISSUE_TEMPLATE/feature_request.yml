@@ -1,0 +1,25 @@
+name: Feature request
+description: Propose future scope without expanding Alpha2
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: "Alpha2 scope is frozen. Accepted ideas may be considered for a later milestone."
+  - type: textarea
+    id: need
+    attributes:
+      label: User need
+      description: Describe the monitoring problem, not only a preferred implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

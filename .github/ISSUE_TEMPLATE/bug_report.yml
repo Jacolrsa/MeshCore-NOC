@@ -1,0 +1,44 @@
+name: Bug report
+description: Report reproducible MeshCore NOC behavior
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not include credentials, private node IDs, or unredacted diagnostics."
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: MeshCore NOC, Home Assistant, and upstream MeshCore versions
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted diagnostics and logs
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I restarted Home Assistant after installing the component.
+          required: true
+        - label: I verified the upstream MeshCore entities are available.
+          required: true
+        - label: I removed sensitive information.
+          required: true

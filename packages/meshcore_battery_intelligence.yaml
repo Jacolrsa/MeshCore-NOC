@@ -1,0 +1,1517 @@
+# MeshCore NOC Battery Intelligence foundation
+#
+# IMPORTANT:
+# - Every helper is owned by one repeater; there is no global calibration.
+# - The *_bi_* sensors are temporary migration entities.
+# - Do not disable or delete legacy calibrated entities until comparison,
+#   rollback, entity-registry, and recorder-continuity testing is complete.
+# - Template sensors calculate live values only and never rewrite Recorder
+#   history.
+#
+# Default profile metadata: 18650 Li-ion
+# Calibration schema version: 1
+
+input_number:
+  meshcore_promicro_repeater_voltage_offset:
+    name: ProMicro Repeater Voltage Offset
+    min: -2.000
+    max: 2.000
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_promicro_repeater_empty_voltage:
+    name: ProMicro Repeater Empty Voltage
+    min: 2.500
+    max: 4.500
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_promicro_repeater_full_voltage:
+    name: ProMicro Repeater Full Voltage
+    min: 2.500
+    max: 5.000
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_myburgh_park_voltage_offset:
+    name: Myburgh Park Voltage Offset
+    min: -2.000
+    max: 2.000
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_myburgh_park_empty_voltage:
+    name: Myburgh Park Empty Voltage
+    min: 2.500
+    max: 4.500
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_myburgh_park_full_voltage:
+    name: Myburgh Park Full Voltage
+    min: 2.500
+    max: 5.000
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_saldanha_voltage_offset:
+    name: Saldanha Voltage Offset
+    min: -2.000
+    max: 2.000
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_saldanha_empty_voltage:
+    name: Saldanha Empty Voltage
+    min: 2.500
+    max: 4.500
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_saldanha_full_voltage:
+    name: Saldanha Full Voltage
+    min: 2.500
+    max: 5.000
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_vredenburg_voltage_offset:
+    name: Vredenburg Voltage Offset
+    min: -2.000
+    max: 2.000
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_vredenburg_empty_voltage:
+    name: Vredenburg Empty Voltage
+    min: 2.500
+    max: 4.500
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_vredenburg_full_voltage:
+    name: Vredenburg Full Voltage
+    min: 2.500
+    max: 5.000
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_vredenburg_ne_voltage_offset:
+    name: Vredenburg NE Voltage Offset
+    min: -2.000
+    max: 2.000
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_vredenburg_ne_empty_voltage:
+    name: Vredenburg NE Empty Voltage
+    min: 2.500
+    max: 4.500
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_vredenburg_ne_full_voltage:
+    name: Vredenburg NE Full Voltage
+    min: 2.500
+    max: 5.000
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_laguna2_voltage_offset:
+    name: Laguna 2 Voltage Offset
+    min: -2.000
+    max: 2.000
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_laguna2_empty_voltage:
+    name: Laguna 2 Empty Voltage
+    min: 2.500
+    max: 4.500
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_laguna2_full_voltage:
+    name: Laguna 2 Full Voltage
+    min: 2.500
+    max: 5.000
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_promicro_test_repeater_voltage_offset:
+    name: ProMicro Test Repeater Voltage Offset
+    min: -2.000
+    max: 2.000
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_promicro_test_repeater_empty_voltage:
+    name: ProMicro Test Repeater Empty Voltage
+    min: 2.500
+    max: 4.500
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_promicro_test_repeater_full_voltage:
+    name: ProMicro Test Repeater Full Voltage
+    min: 2.500
+    max: 5.000
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_test_solar_voltage_offset:
+    name: Test Solar Voltage Offset
+    min: -2.000
+    max: 2.000
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_test_solar_empty_voltage:
+    name: Test Solar Empty Voltage
+    min: 2.500
+    max: 4.500
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+  meshcore_test_solar_full_voltage:
+    name: Test Solar Full Voltage
+    min: 2.500
+    max: 5.000
+    step: 0.001
+    unit_of_measurement: V
+    mode: box
+
+# input_number.initial is intentionally omitted because Home Assistant would
+# reapply it at restart and overwrite restored, tuned per-repeater calibration.
+# This persistent marker distinguishes first-install initialization from normal
+# restored numeric helper states without guessing from any helper value.
+input_boolean:
+  meshcore_battery_intelligence_defaults_initialized:
+    name: MeshCore Battery Intelligence Defaults Initialized
+    icon: mdi:check-decagram
+
+# The initializer is guarded by the persistent marker and is safe to invoke
+# again: after successful first initialization it cannot alter tuned values.
+# The factory-reset script is intentionally destructive and must be run only
+# when all per-repeater calibration values should be discarded.
+script:
+  meshcore_battery_intelligence_initialize_defaults:
+    alias: MeshCore Battery Intelligence — Initialize Defaults
+    description: First-installation-only initialization of the 24 per-repeater calibration helpers; subsequent runs leave tuned values unchanged.
+    mode: single
+    sequence:
+      - condition: state
+        entity_id: input_boolean.meshcore_battery_intelligence_defaults_initialized
+        state: "off"
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_promicro_repeater_voltage_offset}
+        data: {value: -0.816}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_promicro_repeater_empty_voltage}
+        data: {value: 3.000}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_promicro_repeater_full_voltage}
+        data: {value: 4.200}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_myburgh_park_voltage_offset}
+        data: {value: -0.816}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_myburgh_park_empty_voltage}
+        data: {value: 3.000}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_myburgh_park_full_voltage}
+        data: {value: 4.200}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_saldanha_voltage_offset}
+        data: {value: -0.816}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_saldanha_empty_voltage}
+        data: {value: 3.000}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_saldanha_full_voltage}
+        data: {value: 4.200}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_vredenburg_voltage_offset}
+        data: {value: -0.816}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_vredenburg_empty_voltage}
+        data: {value: 3.000}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_vredenburg_full_voltage}
+        data: {value: 4.200}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_vredenburg_ne_voltage_offset}
+        data: {value: -0.816}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_vredenburg_ne_empty_voltage}
+        data: {value: 3.000}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_vredenburg_ne_full_voltage}
+        data: {value: 4.200}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_laguna2_voltage_offset}
+        data: {value: -0.816}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_laguna2_empty_voltage}
+        data: {value: 3.000}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_laguna2_full_voltage}
+        data: {value: 4.200}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_promicro_test_repeater_voltage_offset}
+        data: {value: -0.816}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_promicro_test_repeater_empty_voltage}
+        data: {value: 3.000}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_promicro_test_repeater_full_voltage}
+        data: {value: 4.200}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_test_solar_voltage_offset}
+        data: {value: -0.816}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_test_solar_empty_voltage}
+        data: {value: 3.000}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_test_solar_full_voltage}
+        data: {value: 4.200}
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.meshcore_battery_intelligence_defaults_initialized
+
+  meshcore_battery_intelligence_factory_reset_calibration:
+    alias: MeshCore Battery Intelligence — Factory Reset Calibration
+    description: "WARNING: Destructive reset that overwrites all 24 per-repeater calibration values with factory defaults."
+    mode: single
+    sequence:
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_promicro_repeater_voltage_offset}
+        data: {value: -0.816}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_promicro_repeater_empty_voltage}
+        data: {value: 3.000}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_promicro_repeater_full_voltage}
+        data: {value: 4.200}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_myburgh_park_voltage_offset}
+        data: {value: -0.816}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_myburgh_park_empty_voltage}
+        data: {value: 3.000}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_myburgh_park_full_voltage}
+        data: {value: 4.200}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_saldanha_voltage_offset}
+        data: {value: -0.816}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_saldanha_empty_voltage}
+        data: {value: 3.000}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_saldanha_full_voltage}
+        data: {value: 4.200}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_vredenburg_voltage_offset}
+        data: {value: -0.816}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_vredenburg_empty_voltage}
+        data: {value: 3.000}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_vredenburg_full_voltage}
+        data: {value: 4.200}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_vredenburg_ne_voltage_offset}
+        data: {value: -0.816}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_vredenburg_ne_empty_voltage}
+        data: {value: 3.000}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_vredenburg_ne_full_voltage}
+        data: {value: 4.200}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_laguna2_voltage_offset}
+        data: {value: -0.816}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_laguna2_empty_voltage}
+        data: {value: 3.000}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_laguna2_full_voltage}
+        data: {value: 4.200}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_promicro_test_repeater_voltage_offset}
+        data: {value: -0.816}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_promicro_test_repeater_empty_voltage}
+        data: {value: 3.000}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_promicro_test_repeater_full_voltage}
+        data: {value: 4.200}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_test_solar_voltage_offset}
+        data: {value: -0.816}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_test_solar_empty_voltage}
+        data: {value: 3.000}
+      - action: input_number.set_value
+        target: {entity_id: input_number.meshcore_test_solar_full_voltage}
+        data: {value: 4.200}
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.meshcore_battery_intelligence_defaults_initialized
+
+  meshcore_battery_intelligence_reset_repeater_calibration:
+    alias: MeshCore Battery Intelligence — Reset This Repeater
+    description: Resets only one repeater's three supplied MeshCore calibration helpers to the approved defaults.
+    mode: single
+    max_exceeded: warning
+    fields:
+      voltage_offset_entity:
+        name: Voltage Offset Helper
+        description: The selected repeater's voltage-offset input_number entity ID.
+        required: true
+        selector:
+          entity:
+            domain: input_number
+      empty_voltage_entity:
+        name: Empty Voltage Helper
+        description: The selected repeater's empty-voltage input_number entity ID.
+        required: true
+        selector:
+          entity:
+            domain: input_number
+      full_voltage_entity:
+        name: Full Voltage Helper
+        description: The selected repeater's full-voltage input_number entity ID.
+        required: true
+        selector:
+          entity:
+            domain: input_number
+    sequence:
+      # Validate every target before the first write. A failed condition stops
+      # the script without changing any helper.
+      - condition: template
+        value_template: >-
+          {% set offset = voltage_offset_entity | string %}
+          {% set empty = empty_voltage_entity | string %}
+          {% set full = full_voltage_entity | string %}
+          {{ offset.startswith('input_number.meshcore_')
+             and offset.endswith('_voltage_offset')
+             and empty.startswith('input_number.meshcore_')
+             and empty.endswith('_empty_voltage')
+             and full.startswith('input_number.meshcore_')
+             and full.endswith('_full_voltage')
+             and offset[:-15] == empty[:-14]
+             and offset[:-15] == full[:-13] }}
+      - action: input_number.set_value
+        target:
+          entity_id: "{{ voltage_offset_entity }}"
+        data:
+          value: -0.816
+      - action: input_number.set_value
+        target:
+          entity_id: "{{ empty_voltage_entity }}"
+        data:
+          value: 3.000
+      - action: input_number.set_value
+        target:
+          entity_id: "{{ full_voltage_entity }}"
+        data:
+          value: 4.200
+
+template:
+  - sensor:
+      # Temporary migration entities. Keep the legacy calibrated entities
+      # enabled until this repeater has completed comparison and rollback tests.
+      - name: ProMicro Repeater BI Calibrated Voltage
+        default_entity_id: sensor.promicro_repeater_bi_calibrated_voltage
+        unique_id: meshcore_promicro_repeater_bi_calibrated_voltage
+        device_class: voltage
+        state_class: measurement
+        unit_of_measurement: V
+        availability: >-
+          {% set raw_text = states('sensor.meshcore_034bdb9383_bat_promicro_repeater') %}
+          {% set offset_text = states('input_number.meshcore_promicro_repeater_voltage_offset') %}
+          {% set empty_text = states('input_number.meshcore_promicro_repeater_empty_voltage') %}
+          {% set full_text = states('input_number.meshcore_promicro_repeater_full_voltage') %}
+          {% set inputs_valid =
+            is_number(raw_text) and
+            is_number(offset_text) and
+            is_number(empty_text) and
+            is_number(full_text)
+          %}
+          {% if inputs_valid %}
+            {% set calibrated = (raw_text | float) + (offset_text | float) %}
+            {{ (full_text | float) > (empty_text | float)
+               and calibrated >= 2.5
+               and calibrated <= 5.0 }}
+          {% else %}
+            false
+          {% endif %}
+        state: >-
+          {% set raw = states('sensor.meshcore_034bdb9383_bat_promicro_repeater') | float %}
+          {% set offset = states('input_number.meshcore_promicro_repeater_voltage_offset') | float %}
+          {{ (raw + offset) | round(3) }}
+        attributes:
+          raw_voltage: >-
+            {% set value = states('sensor.meshcore_034bdb9383_bat_promicro_repeater') %}
+            {{ (value | float) if is_number(value) else none }}
+          voltage_offset: >-
+            {% set value = states('input_number.meshcore_promicro_repeater_voltage_offset') %}
+            {{ (value | float) if is_number(value) else none }}
+          empty_voltage: >-
+            {% set value = states('input_number.meshcore_promicro_repeater_empty_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          full_voltage: >-
+            {% set value = states('input_number.meshcore_promicro_repeater_full_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          battery_profile: "18650 Li-ion"
+          calibration_schema_version: 1
+          calculation_status: >-
+            {% set raw_text = states('sensor.meshcore_034bdb9383_bat_promicro_repeater') %}
+            {% set offset_text = states('input_number.meshcore_promicro_repeater_voltage_offset') %}
+            {% set empty_text = states('input_number.meshcore_promicro_repeater_empty_voltage') %}
+            {% set full_text = states('input_number.meshcore_promicro_repeater_full_voltage') %}
+            {% if not is_number(raw_text) %}
+              invalid_raw_voltage
+            {% elif not is_number(offset_text)
+                  or not is_number(empty_text)
+                  or not is_number(full_text) %}
+              invalid_calibration_helper
+            {% elif (full_text | float) <= (empty_text | float) %}
+              invalid_calibration_range
+            {% elif ((raw_text | float) + (offset_text | float)) < 2.5
+                  or ((raw_text | float) + (offset_text | float)) > 5.0 %}
+              invalid_calibrated_voltage
+            {% else %}
+              valid
+            {% endif %}
+
+      - name: ProMicro Repeater BI Battery Percentage
+        default_entity_id: sensor.promicro_repeater_bi_battery_percentage
+        unique_id: meshcore_promicro_repeater_bi_battery_percentage
+        device_class: battery
+        state_class: measurement
+        unit_of_measurement: "%"
+        availability: >-
+          {% set raw_text = states('sensor.meshcore_034bdb9383_bat_promicro_repeater') %}
+          {% set offset_text = states('input_number.meshcore_promicro_repeater_voltage_offset') %}
+          {% set empty_text = states('input_number.meshcore_promicro_repeater_empty_voltage') %}
+          {% set full_text = states('input_number.meshcore_promicro_repeater_full_voltage') %}
+          {% set inputs_valid =
+            is_number(raw_text) and
+            is_number(offset_text) and
+            is_number(empty_text) and
+            is_number(full_text)
+          %}
+          {% if inputs_valid %}
+            {% set calibrated = (raw_text | float) + (offset_text | float) %}
+            {{ (full_text | float) > (empty_text | float)
+               and calibrated >= 2.5
+               and calibrated <= 5.0 }}
+          {% else %}
+            false
+          {% endif %}
+        state: >-
+          {% set raw = states('sensor.meshcore_034bdb9383_bat_promicro_repeater') | float %}
+          {% set offset = states('input_number.meshcore_promicro_repeater_voltage_offset') | float %}
+          {% set empty = states('input_number.meshcore_promicro_repeater_empty_voltage') | float %}
+          {% set full = states('input_number.meshcore_promicro_repeater_full_voltage') | float %}
+          {% set calibrated = raw + offset %}
+          {% set percentage = ((calibrated - empty) / (full - empty)) * 100 %}
+          {{ [[percentage, 0] | max, 100] | min | round(0) }}
+        attributes:
+          raw_voltage: >-
+            {% set value = states('sensor.meshcore_034bdb9383_bat_promicro_repeater') %}
+            {{ (value | float) if is_number(value) else none }}
+          voltage_offset: >-
+            {% set value = states('input_number.meshcore_promicro_repeater_voltage_offset') %}
+            {{ (value | float) if is_number(value) else none }}
+          empty_voltage: >-
+            {% set value = states('input_number.meshcore_promicro_repeater_empty_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          full_voltage: >-
+            {% set value = states('input_number.meshcore_promicro_repeater_full_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          battery_profile: "18650 Li-ion"
+          calibration_schema_version: 1
+          calculation_status: >-
+            {% set raw_text = states('sensor.meshcore_034bdb9383_bat_promicro_repeater') %}
+            {% set offset_text = states('input_number.meshcore_promicro_repeater_voltage_offset') %}
+            {% set empty_text = states('input_number.meshcore_promicro_repeater_empty_voltage') %}
+            {% set full_text = states('input_number.meshcore_promicro_repeater_full_voltage') %}
+            {% if not is_number(raw_text) %}
+              invalid_raw_voltage
+            {% elif not is_number(offset_text)
+                  or not is_number(empty_text)
+                  or not is_number(full_text) %}
+              invalid_calibration_helper
+            {% elif (full_text | float) <= (empty_text | float) %}
+              invalid_calibration_range
+            {% elif ((raw_text | float) + (offset_text | float)) < 2.5
+                  or ((raw_text | float) + (offset_text | float)) > 5.0 %}
+              invalid_calibrated_voltage
+            {% else %}
+              valid
+            {% endif %}
+
+      # Temporary migration entities. Keep the legacy calibrated entities
+      # enabled until this repeater has completed comparison and rollback tests.
+      - name: Myburgh Park BI Calibrated Voltage
+        default_entity_id: sensor.myburgh_park_bi_calibrated_voltage
+        unique_id: meshcore_myburgh_park_bi_calibrated_voltage
+        device_class: voltage
+        state_class: measurement
+        unit_of_measurement: V
+        availability: >-
+          {% set raw_text = states('sensor.meshcore_02951be5e5_bat_myburgh_park') %}
+          {% set offset_text = states('input_number.meshcore_myburgh_park_voltage_offset') %}
+          {% set empty_text = states('input_number.meshcore_myburgh_park_empty_voltage') %}
+          {% set full_text = states('input_number.meshcore_myburgh_park_full_voltage') %}
+          {% set inputs_valid =
+            is_number(raw_text) and
+            is_number(offset_text) and
+            is_number(empty_text) and
+            is_number(full_text)
+          %}
+          {% if inputs_valid %}
+            {% set calibrated = (raw_text | float) + (offset_text | float) %}
+            {{ (full_text | float) > (empty_text | float)
+               and calibrated >= 2.5
+               and calibrated <= 5.0 }}
+          {% else %}
+            false
+          {% endif %}
+        state: >-
+          {% set raw = states('sensor.meshcore_02951be5e5_bat_myburgh_park') | float %}
+          {% set offset = states('input_number.meshcore_myburgh_park_voltage_offset') | float %}
+          {{ (raw + offset) | round(3) }}
+        attributes:
+          raw_voltage: >-
+            {% set value = states('sensor.meshcore_02951be5e5_bat_myburgh_park') %}
+            {{ (value | float) if is_number(value) else none }}
+          voltage_offset: >-
+            {% set value = states('input_number.meshcore_myburgh_park_voltage_offset') %}
+            {{ (value | float) if is_number(value) else none }}
+          empty_voltage: >-
+            {% set value = states('input_number.meshcore_myburgh_park_empty_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          full_voltage: >-
+            {% set value = states('input_number.meshcore_myburgh_park_full_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          battery_profile: "18650 Li-ion"
+          calibration_schema_version: 1
+          calculation_status: >-
+            {% set raw_text = states('sensor.meshcore_02951be5e5_bat_myburgh_park') %}
+            {% set offset_text = states('input_number.meshcore_myburgh_park_voltage_offset') %}
+            {% set empty_text = states('input_number.meshcore_myburgh_park_empty_voltage') %}
+            {% set full_text = states('input_number.meshcore_myburgh_park_full_voltage') %}
+            {% if not is_number(raw_text) %}
+              invalid_raw_voltage
+            {% elif not is_number(offset_text)
+                  or not is_number(empty_text)
+                  or not is_number(full_text) %}
+              invalid_calibration_helper
+            {% elif (full_text | float) <= (empty_text | float) %}
+              invalid_calibration_range
+            {% elif ((raw_text | float) + (offset_text | float)) < 2.5
+                  or ((raw_text | float) + (offset_text | float)) > 5.0 %}
+              invalid_calibrated_voltage
+            {% else %}
+              valid
+            {% endif %}
+
+      - name: Myburgh Park BI Battery Percentage
+        default_entity_id: sensor.myburgh_park_bi_battery_percentage
+        unique_id: meshcore_myburgh_park_bi_battery_percentage
+        device_class: battery
+        state_class: measurement
+        unit_of_measurement: "%"
+        availability: >-
+          {% set raw_text = states('sensor.meshcore_02951be5e5_bat_myburgh_park') %}
+          {% set offset_text = states('input_number.meshcore_myburgh_park_voltage_offset') %}
+          {% set empty_text = states('input_number.meshcore_myburgh_park_empty_voltage') %}
+          {% set full_text = states('input_number.meshcore_myburgh_park_full_voltage') %}
+          {% set inputs_valid =
+            is_number(raw_text) and
+            is_number(offset_text) and
+            is_number(empty_text) and
+            is_number(full_text)
+          %}
+          {% if inputs_valid %}
+            {% set calibrated = (raw_text | float) + (offset_text | float) %}
+            {{ (full_text | float) > (empty_text | float)
+               and calibrated >= 2.5
+               and calibrated <= 5.0 }}
+          {% else %}
+            false
+          {% endif %}
+        state: >-
+          {% set raw = states('sensor.meshcore_02951be5e5_bat_myburgh_park') | float %}
+          {% set offset = states('input_number.meshcore_myburgh_park_voltage_offset') | float %}
+          {% set empty = states('input_number.meshcore_myburgh_park_empty_voltage') | float %}
+          {% set full = states('input_number.meshcore_myburgh_park_full_voltage') | float %}
+          {% set calibrated = raw + offset %}
+          {% set percentage = ((calibrated - empty) / (full - empty)) * 100 %}
+          {{ [[percentage, 0] | max, 100] | min | round(0) }}
+        attributes:
+          raw_voltage: >-
+            {% set value = states('sensor.meshcore_02951be5e5_bat_myburgh_park') %}
+            {{ (value | float) if is_number(value) else none }}
+          voltage_offset: >-
+            {% set value = states('input_number.meshcore_myburgh_park_voltage_offset') %}
+            {{ (value | float) if is_number(value) else none }}
+          empty_voltage: >-
+            {% set value = states('input_number.meshcore_myburgh_park_empty_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          full_voltage: >-
+            {% set value = states('input_number.meshcore_myburgh_park_full_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          battery_profile: "18650 Li-ion"
+          calibration_schema_version: 1
+          calculation_status: >-
+            {% set raw_text = states('sensor.meshcore_02951be5e5_bat_myburgh_park') %}
+            {% set offset_text = states('input_number.meshcore_myburgh_park_voltage_offset') %}
+            {% set empty_text = states('input_number.meshcore_myburgh_park_empty_voltage') %}
+            {% set full_text = states('input_number.meshcore_myburgh_park_full_voltage') %}
+            {% if not is_number(raw_text) %}
+              invalid_raw_voltage
+            {% elif not is_number(offset_text)
+                  or not is_number(empty_text)
+                  or not is_number(full_text) %}
+              invalid_calibration_helper
+            {% elif (full_text | float) <= (empty_text | float) %}
+              invalid_calibration_range
+            {% elif ((raw_text | float) + (offset_text | float)) < 2.5
+                  or ((raw_text | float) + (offset_text | float)) > 5.0 %}
+              invalid_calibrated_voltage
+            {% else %}
+              valid
+            {% endif %}
+
+      # Temporary migration entities. Keep the legacy calibrated entities
+      # enabled until this repeater has completed comparison and rollback tests.
+      - name: Saldanha BI Calibrated Voltage
+        default_entity_id: sensor.saldanha_repeater_bi_calibrated_voltage
+        unique_id: meshcore_saldanha_bi_calibrated_voltage
+        device_class: voltage
+        state_class: measurement
+        unit_of_measurement: V
+        availability: >-
+          {% set raw_text = states('sensor.meshcore_f9caec4ded_bat_saldanha') %}
+          {% set offset_text = states('input_number.meshcore_saldanha_voltage_offset') %}
+          {% set empty_text = states('input_number.meshcore_saldanha_empty_voltage') %}
+          {% set full_text = states('input_number.meshcore_saldanha_full_voltage') %}
+          {% set inputs_valid =
+            is_number(raw_text) and
+            is_number(offset_text) and
+            is_number(empty_text) and
+            is_number(full_text)
+          %}
+          {% if inputs_valid %}
+            {% set calibrated = (raw_text | float) + (offset_text | float) %}
+            {{ (full_text | float) > (empty_text | float)
+               and calibrated >= 2.5
+               and calibrated <= 5.0 }}
+          {% else %}
+            false
+          {% endif %}
+        state: >-
+          {% set raw = states('sensor.meshcore_f9caec4ded_bat_saldanha') | float %}
+          {% set offset = states('input_number.meshcore_saldanha_voltage_offset') | float %}
+          {{ (raw + offset) | round(3) }}
+        attributes:
+          raw_voltage: >-
+            {% set value = states('sensor.meshcore_f9caec4ded_bat_saldanha') %}
+            {{ (value | float) if is_number(value) else none }}
+          voltage_offset: >-
+            {% set value = states('input_number.meshcore_saldanha_voltage_offset') %}
+            {{ (value | float) if is_number(value) else none }}
+          empty_voltage: >-
+            {% set value = states('input_number.meshcore_saldanha_empty_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          full_voltage: >-
+            {% set value = states('input_number.meshcore_saldanha_full_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          battery_profile: "18650 Li-ion"
+          calibration_schema_version: 1
+          calculation_status: >-
+            {% set raw_text = states('sensor.meshcore_f9caec4ded_bat_saldanha') %}
+            {% set offset_text = states('input_number.meshcore_saldanha_voltage_offset') %}
+            {% set empty_text = states('input_number.meshcore_saldanha_empty_voltage') %}
+            {% set full_text = states('input_number.meshcore_saldanha_full_voltage') %}
+            {% if not is_number(raw_text) %}
+              invalid_raw_voltage
+            {% elif not is_number(offset_text)
+                  or not is_number(empty_text)
+                  or not is_number(full_text) %}
+              invalid_calibration_helper
+            {% elif (full_text | float) <= (empty_text | float) %}
+              invalid_calibration_range
+            {% elif ((raw_text | float) + (offset_text | float)) < 2.5
+                  or ((raw_text | float) + (offset_text | float)) > 5.0 %}
+              invalid_calibrated_voltage
+            {% else %}
+              valid
+            {% endif %}
+
+      - name: Saldanha BI Battery Percentage
+        default_entity_id: sensor.saldanha_repeater_bi_battery_percentage
+        unique_id: meshcore_saldanha_bi_battery_percentage
+        device_class: battery
+        state_class: measurement
+        unit_of_measurement: "%"
+        availability: >-
+          {% set raw_text = states('sensor.meshcore_f9caec4ded_bat_saldanha') %}
+          {% set offset_text = states('input_number.meshcore_saldanha_voltage_offset') %}
+          {% set empty_text = states('input_number.meshcore_saldanha_empty_voltage') %}
+          {% set full_text = states('input_number.meshcore_saldanha_full_voltage') %}
+          {% set inputs_valid =
+            is_number(raw_text) and
+            is_number(offset_text) and
+            is_number(empty_text) and
+            is_number(full_text)
+          %}
+          {% if inputs_valid %}
+            {% set calibrated = (raw_text | float) + (offset_text | float) %}
+            {{ (full_text | float) > (empty_text | float)
+               and calibrated >= 2.5
+               and calibrated <= 5.0 }}
+          {% else %}
+            false
+          {% endif %}
+        state: >-
+          {% set raw = states('sensor.meshcore_f9caec4ded_bat_saldanha') | float %}
+          {% set offset = states('input_number.meshcore_saldanha_voltage_offset') | float %}
+          {% set empty = states('input_number.meshcore_saldanha_empty_voltage') | float %}
+          {% set full = states('input_number.meshcore_saldanha_full_voltage') | float %}
+          {% set calibrated = raw + offset %}
+          {% set percentage = ((calibrated - empty) / (full - empty)) * 100 %}
+          {{ [[percentage, 0] | max, 100] | min | round(0) }}
+        attributes:
+          raw_voltage: >-
+            {% set value = states('sensor.meshcore_f9caec4ded_bat_saldanha') %}
+            {{ (value | float) if is_number(value) else none }}
+          voltage_offset: >-
+            {% set value = states('input_number.meshcore_saldanha_voltage_offset') %}
+            {{ (value | float) if is_number(value) else none }}
+          empty_voltage: >-
+            {% set value = states('input_number.meshcore_saldanha_empty_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          full_voltage: >-
+            {% set value = states('input_number.meshcore_saldanha_full_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          battery_profile: "18650 Li-ion"
+          calibration_schema_version: 1
+          calculation_status: >-
+            {% set raw_text = states('sensor.meshcore_f9caec4ded_bat_saldanha') %}
+            {% set offset_text = states('input_number.meshcore_saldanha_voltage_offset') %}
+            {% set empty_text = states('input_number.meshcore_saldanha_empty_voltage') %}
+            {% set full_text = states('input_number.meshcore_saldanha_full_voltage') %}
+            {% if not is_number(raw_text) %}
+              invalid_raw_voltage
+            {% elif not is_number(offset_text)
+                  or not is_number(empty_text)
+                  or not is_number(full_text) %}
+              invalid_calibration_helper
+            {% elif (full_text | float) <= (empty_text | float) %}
+              invalid_calibration_range
+            {% elif ((raw_text | float) + (offset_text | float)) < 2.5
+                  or ((raw_text | float) + (offset_text | float)) > 5.0 %}
+              invalid_calibrated_voltage
+            {% else %}
+              valid
+            {% endif %}
+
+      # Temporary migration entities. Keep the legacy calibrated entities
+      # enabled until this repeater has completed comparison and rollback tests.
+      - name: Vredenburg BI Calibrated Voltage
+        default_entity_id: sensor.vredenburg_bi_calibrated_voltage
+        unique_id: meshcore_vredenburg_bi_calibrated_voltage
+        device_class: voltage
+        state_class: measurement
+        unit_of_measurement: V
+        availability: >-
+          {% set raw_text = states('sensor.meshcore_65297b53fa_bat_vredenburg') %}
+          {% set offset_text = states('input_number.meshcore_vredenburg_voltage_offset') %}
+          {% set empty_text = states('input_number.meshcore_vredenburg_empty_voltage') %}
+          {% set full_text = states('input_number.meshcore_vredenburg_full_voltage') %}
+          {% set inputs_valid =
+            is_number(raw_text) and
+            is_number(offset_text) and
+            is_number(empty_text) and
+            is_number(full_text)
+          %}
+          {% if inputs_valid %}
+            {% set calibrated = (raw_text | float) + (offset_text | float) %}
+            {{ (full_text | float) > (empty_text | float)
+               and calibrated >= 2.5
+               and calibrated <= 5.0 }}
+          {% else %}
+            false
+          {% endif %}
+        state: >-
+          {% set raw = states('sensor.meshcore_65297b53fa_bat_vredenburg') | float %}
+          {% set offset = states('input_number.meshcore_vredenburg_voltage_offset') | float %}
+          {{ (raw + offset) | round(3) }}
+        attributes:
+          raw_voltage: >-
+            {% set value = states('sensor.meshcore_65297b53fa_bat_vredenburg') %}
+            {{ (value | float) if is_number(value) else none }}
+          voltage_offset: >-
+            {% set value = states('input_number.meshcore_vredenburg_voltage_offset') %}
+            {{ (value | float) if is_number(value) else none }}
+          empty_voltage: >-
+            {% set value = states('input_number.meshcore_vredenburg_empty_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          full_voltage: >-
+            {% set value = states('input_number.meshcore_vredenburg_full_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          battery_profile: "18650 Li-ion"
+          calibration_schema_version: 1
+          calculation_status: >-
+            {% set raw_text = states('sensor.meshcore_65297b53fa_bat_vredenburg') %}
+            {% set offset_text = states('input_number.meshcore_vredenburg_voltage_offset') %}
+            {% set empty_text = states('input_number.meshcore_vredenburg_empty_voltage') %}
+            {% set full_text = states('input_number.meshcore_vredenburg_full_voltage') %}
+            {% if not is_number(raw_text) %}
+              invalid_raw_voltage
+            {% elif not is_number(offset_text)
+                  or not is_number(empty_text)
+                  or not is_number(full_text) %}
+              invalid_calibration_helper
+            {% elif (full_text | float) <= (empty_text | float) %}
+              invalid_calibration_range
+            {% elif ((raw_text | float) + (offset_text | float)) < 2.5
+                  or ((raw_text | float) + (offset_text | float)) > 5.0 %}
+              invalid_calibrated_voltage
+            {% else %}
+              valid
+            {% endif %}
+
+      - name: Vredenburg BI Battery Percentage
+        default_entity_id: sensor.vredenburg_bi_battery_percentage
+        unique_id: meshcore_vredenburg_bi_battery_percentage
+        device_class: battery
+        state_class: measurement
+        unit_of_measurement: "%"
+        availability: >-
+          {% set raw_text = states('sensor.meshcore_65297b53fa_bat_vredenburg') %}
+          {% set offset_text = states('input_number.meshcore_vredenburg_voltage_offset') %}
+          {% set empty_text = states('input_number.meshcore_vredenburg_empty_voltage') %}
+          {% set full_text = states('input_number.meshcore_vredenburg_full_voltage') %}
+          {% set inputs_valid =
+            is_number(raw_text) and
+            is_number(offset_text) and
+            is_number(empty_text) and
+            is_number(full_text)
+          %}
+          {% if inputs_valid %}
+            {% set calibrated = (raw_text | float) + (offset_text | float) %}
+            {{ (full_text | float) > (empty_text | float)
+               and calibrated >= 2.5
+               and calibrated <= 5.0 }}
+          {% else %}
+            false
+          {% endif %}
+        state: >-
+          {% set raw = states('sensor.meshcore_65297b53fa_bat_vredenburg') | float %}
+          {% set offset = states('input_number.meshcore_vredenburg_voltage_offset') | float %}
+          {% set empty = states('input_number.meshcore_vredenburg_empty_voltage') | float %}
+          {% set full = states('input_number.meshcore_vredenburg_full_voltage') | float %}
+          {% set calibrated = raw + offset %}
+          {% set percentage = ((calibrated - empty) / (full - empty)) * 100 %}
+          {{ [[percentage, 0] | max, 100] | min | round(0) }}
+        attributes:
+          raw_voltage: >-
+            {% set value = states('sensor.meshcore_65297b53fa_bat_vredenburg') %}
+            {{ (value | float) if is_number(value) else none }}
+          voltage_offset: >-
+            {% set value = states('input_number.meshcore_vredenburg_voltage_offset') %}
+            {{ (value | float) if is_number(value) else none }}
+          empty_voltage: >-
+            {% set value = states('input_number.meshcore_vredenburg_empty_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          full_voltage: >-
+            {% set value = states('input_number.meshcore_vredenburg_full_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          battery_profile: "18650 Li-ion"
+          calibration_schema_version: 1
+          calculation_status: >-
+            {% set raw_text = states('sensor.meshcore_65297b53fa_bat_vredenburg') %}
+            {% set offset_text = states('input_number.meshcore_vredenburg_voltage_offset') %}
+            {% set empty_text = states('input_number.meshcore_vredenburg_empty_voltage') %}
+            {% set full_text = states('input_number.meshcore_vredenburg_full_voltage') %}
+            {% if not is_number(raw_text) %}
+              invalid_raw_voltage
+            {% elif not is_number(offset_text)
+                  or not is_number(empty_text)
+                  or not is_number(full_text) %}
+              invalid_calibration_helper
+            {% elif (full_text | float) <= (empty_text | float) %}
+              invalid_calibration_range
+            {% elif ((raw_text | float) + (offset_text | float)) < 2.5
+                  or ((raw_text | float) + (offset_text | float)) > 5.0 %}
+              invalid_calibrated_voltage
+            {% else %}
+              valid
+            {% endif %}
+
+      # Temporary migration entities. Keep the legacy calibrated entities
+      # enabled until this repeater has completed comparison and rollback tests.
+      - name: Vredenburg NE BI Calibrated Voltage
+        default_entity_id: sensor.vredenburg_ne_bi_calibrated_voltage
+        unique_id: meshcore_vredenburg_ne_bi_calibrated_voltage
+        device_class: voltage
+        state_class: measurement
+        unit_of_measurement: V
+        availability: >-
+          {% set raw_text = states('sensor.meshcore_2d1ada344b_bat_vredenburg_ne') %}
+          {% set offset_text = states('input_number.meshcore_vredenburg_ne_voltage_offset') %}
+          {% set empty_text = states('input_number.meshcore_vredenburg_ne_empty_voltage') %}
+          {% set full_text = states('input_number.meshcore_vredenburg_ne_full_voltage') %}
+          {% set inputs_valid =
+            is_number(raw_text) and
+            is_number(offset_text) and
+            is_number(empty_text) and
+            is_number(full_text)
+          %}
+          {% if inputs_valid %}
+            {% set calibrated = (raw_text | float) + (offset_text | float) %}
+            {{ (full_text | float) > (empty_text | float)
+               and calibrated >= 2.5
+               and calibrated <= 5.0 }}
+          {% else %}
+            false
+          {% endif %}
+        state: >-
+          {% set raw = states('sensor.meshcore_2d1ada344b_bat_vredenburg_ne') | float %}
+          {% set offset = states('input_number.meshcore_vredenburg_ne_voltage_offset') | float %}
+          {{ (raw + offset) | round(3) }}
+        attributes:
+          raw_voltage: >-
+            {% set value = states('sensor.meshcore_2d1ada344b_bat_vredenburg_ne') %}
+            {{ (value | float) if is_number(value) else none }}
+          voltage_offset: >-
+            {% set value = states('input_number.meshcore_vredenburg_ne_voltage_offset') %}
+            {{ (value | float) if is_number(value) else none }}
+          empty_voltage: >-
+            {% set value = states('input_number.meshcore_vredenburg_ne_empty_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          full_voltage: >-
+            {% set value = states('input_number.meshcore_vredenburg_ne_full_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          battery_profile: "18650 Li-ion"
+          calibration_schema_version: 1
+          calculation_status: >-
+            {% set raw_text = states('sensor.meshcore_2d1ada344b_bat_vredenburg_ne') %}
+            {% set offset_text = states('input_number.meshcore_vredenburg_ne_voltage_offset') %}
+            {% set empty_text = states('input_number.meshcore_vredenburg_ne_empty_voltage') %}
+            {% set full_text = states('input_number.meshcore_vredenburg_ne_full_voltage') %}
+            {% if not is_number(raw_text) %}
+              invalid_raw_voltage
+            {% elif not is_number(offset_text)
+                  or not is_number(empty_text)
+                  or not is_number(full_text) %}
+              invalid_calibration_helper
+            {% elif (full_text | float) <= (empty_text | float) %}
+              invalid_calibration_range
+            {% elif ((raw_text | float) + (offset_text | float)) < 2.5
+                  or ((raw_text | float) + (offset_text | float)) > 5.0 %}
+              invalid_calibrated_voltage
+            {% else %}
+              valid
+            {% endif %}
+
+      - name: Vredenburg NE BI Battery Percentage
+        default_entity_id: sensor.vredenburg_ne_bi_battery_percentage
+        unique_id: meshcore_vredenburg_ne_bi_battery_percentage
+        device_class: battery
+        state_class: measurement
+        unit_of_measurement: "%"
+        availability: >-
+          {% set raw_text = states('sensor.meshcore_2d1ada344b_bat_vredenburg_ne') %}
+          {% set offset_text = states('input_number.meshcore_vredenburg_ne_voltage_offset') %}
+          {% set empty_text = states('input_number.meshcore_vredenburg_ne_empty_voltage') %}
+          {% set full_text = states('input_number.meshcore_vredenburg_ne_full_voltage') %}
+          {% set inputs_valid =
+            is_number(raw_text) and
+            is_number(offset_text) and
+            is_number(empty_text) and
+            is_number(full_text)
+          %}
+          {% if inputs_valid %}
+            {% set calibrated = (raw_text | float) + (offset_text | float) %}
+            {{ (full_text | float) > (empty_text | float)
+               and calibrated >= 2.5
+               and calibrated <= 5.0 }}
+          {% else %}
+            false
+          {% endif %}
+        state: >-
+          {% set raw = states('sensor.meshcore_2d1ada344b_bat_vredenburg_ne') | float %}
+          {% set offset = states('input_number.meshcore_vredenburg_ne_voltage_offset') | float %}
+          {% set empty = states('input_number.meshcore_vredenburg_ne_empty_voltage') | float %}
+          {% set full = states('input_number.meshcore_vredenburg_ne_full_voltage') | float %}
+          {% set calibrated = raw + offset %}
+          {% set percentage = ((calibrated - empty) / (full - empty)) * 100 %}
+          {{ [[percentage, 0] | max, 100] | min | round(0) }}
+        attributes:
+          raw_voltage: >-
+            {% set value = states('sensor.meshcore_2d1ada344b_bat_vredenburg_ne') %}
+            {{ (value | float) if is_number(value) else none }}
+          voltage_offset: >-
+            {% set value = states('input_number.meshcore_vredenburg_ne_voltage_offset') %}
+            {{ (value | float) if is_number(value) else none }}
+          empty_voltage: >-
+            {% set value = states('input_number.meshcore_vredenburg_ne_empty_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          full_voltage: >-
+            {% set value = states('input_number.meshcore_vredenburg_ne_full_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          battery_profile: "18650 Li-ion"
+          calibration_schema_version: 1
+          calculation_status: >-
+            {% set raw_text = states('sensor.meshcore_2d1ada344b_bat_vredenburg_ne') %}
+            {% set offset_text = states('input_number.meshcore_vredenburg_ne_voltage_offset') %}
+            {% set empty_text = states('input_number.meshcore_vredenburg_ne_empty_voltage') %}
+            {% set full_text = states('input_number.meshcore_vredenburg_ne_full_voltage') %}
+            {% if not is_number(raw_text) %}
+              invalid_raw_voltage
+            {% elif not is_number(offset_text)
+                  or not is_number(empty_text)
+                  or not is_number(full_text) %}
+              invalid_calibration_helper
+            {% elif (full_text | float) <= (empty_text | float) %}
+              invalid_calibration_range
+            {% elif ((raw_text | float) + (offset_text | float)) < 2.5
+                  or ((raw_text | float) + (offset_text | float)) > 5.0 %}
+              invalid_calibrated_voltage
+            {% else %}
+              valid
+            {% endif %}
+
+      # Temporary migration entities. Keep the legacy calibrated entities
+      # enabled until this repeater has completed comparison and rollback tests.
+      - name: Laguna 2 BI Calibrated Voltage
+        default_entity_id: sensor.laguna2_repeater_bi_calibrated_voltage
+        unique_id: meshcore_laguna2_bi_calibrated_voltage
+        device_class: voltage
+        state_class: measurement
+        unit_of_measurement: V
+        availability: >-
+          {% set raw_text = states('sensor.meshcore_01c1a4fa32_bat_laguna2') %}
+          {% set offset_text = states('input_number.meshcore_laguna2_voltage_offset') %}
+          {% set empty_text = states('input_number.meshcore_laguna2_empty_voltage') %}
+          {% set full_text = states('input_number.meshcore_laguna2_full_voltage') %}
+          {% set inputs_valid =
+            is_number(raw_text) and
+            is_number(offset_text) and
+            is_number(empty_text) and
+            is_number(full_text)
+          %}
+          {% if inputs_valid %}
+            {% set calibrated = (raw_text | float) + (offset_text | float) %}
+            {{ (full_text | float) > (empty_text | float)
+               and calibrated >= 2.5
+               and calibrated <= 5.0 }}
+          {% else %}
+            false
+          {% endif %}
+        state: >-
+          {% set raw = states('sensor.meshcore_01c1a4fa32_bat_laguna2') | float %}
+          {% set offset = states('input_number.meshcore_laguna2_voltage_offset') | float %}
+          {{ (raw + offset) | round(3) }}
+        attributes:
+          raw_voltage: >-
+            {% set value = states('sensor.meshcore_01c1a4fa32_bat_laguna2') %}
+            {{ (value | float) if is_number(value) else none }}
+          voltage_offset: >-
+            {% set value = states('input_number.meshcore_laguna2_voltage_offset') %}
+            {{ (value | float) if is_number(value) else none }}
+          empty_voltage: >-
+            {% set value = states('input_number.meshcore_laguna2_empty_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          full_voltage: >-
+            {% set value = states('input_number.meshcore_laguna2_full_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          battery_profile: "18650 Li-ion"
+          calibration_schema_version: 1
+          calculation_status: >-
+            {% set raw_text = states('sensor.meshcore_01c1a4fa32_bat_laguna2') %}
+            {% set offset_text = states('input_number.meshcore_laguna2_voltage_offset') %}
+            {% set empty_text = states('input_number.meshcore_laguna2_empty_voltage') %}
+            {% set full_text = states('input_number.meshcore_laguna2_full_voltage') %}
+            {% if not is_number(raw_text) %}
+              invalid_raw_voltage
+            {% elif not is_number(offset_text)
+                  or not is_number(empty_text)
+                  or not is_number(full_text) %}
+              invalid_calibration_helper
+            {% elif (full_text | float) <= (empty_text | float) %}
+              invalid_calibration_range
+            {% elif ((raw_text | float) + (offset_text | float)) < 2.5
+                  or ((raw_text | float) + (offset_text | float)) > 5.0 %}
+              invalid_calibrated_voltage
+            {% else %}
+              valid
+            {% endif %}
+
+      - name: Laguna 2 BI Battery Percentage
+        default_entity_id: sensor.laguna2_bi_battery_percentage
+        unique_id: meshcore_laguna2_bi_battery_percentage
+        device_class: battery
+        state_class: measurement
+        unit_of_measurement: "%"
+        availability: >-
+          {% set raw_text = states('sensor.meshcore_01c1a4fa32_bat_laguna2') %}
+          {% set offset_text = states('input_number.meshcore_laguna2_voltage_offset') %}
+          {% set empty_text = states('input_number.meshcore_laguna2_empty_voltage') %}
+          {% set full_text = states('input_number.meshcore_laguna2_full_voltage') %}
+          {% set inputs_valid =
+            is_number(raw_text) and
+            is_number(offset_text) and
+            is_number(empty_text) and
+            is_number(full_text)
+          %}
+          {% if inputs_valid %}
+            {% set calibrated = (raw_text | float) + (offset_text | float) %}
+            {{ (full_text | float) > (empty_text | float)
+               and calibrated >= 2.5
+               and calibrated <= 5.0 }}
+          {% else %}
+            false
+          {% endif %}
+        state: >-
+          {% set raw = states('sensor.meshcore_01c1a4fa32_bat_laguna2') | float %}
+          {% set offset = states('input_number.meshcore_laguna2_voltage_offset') | float %}
+          {% set empty = states('input_number.meshcore_laguna2_empty_voltage') | float %}
+          {% set full = states('input_number.meshcore_laguna2_full_voltage') | float %}
+          {% set calibrated = raw + offset %}
+          {% set percentage = ((calibrated - empty) / (full - empty)) * 100 %}
+          {{ [[percentage, 0] | max, 100] | min | round(0) }}
+        attributes:
+          raw_voltage: >-
+            {% set value = states('sensor.meshcore_01c1a4fa32_bat_laguna2') %}
+            {{ (value | float) if is_number(value) else none }}
+          voltage_offset: >-
+            {% set value = states('input_number.meshcore_laguna2_voltage_offset') %}
+            {{ (value | float) if is_number(value) else none }}
+          empty_voltage: >-
+            {% set value = states('input_number.meshcore_laguna2_empty_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          full_voltage: >-
+            {% set value = states('input_number.meshcore_laguna2_full_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          battery_profile: "18650 Li-ion"
+          calibration_schema_version: 1
+          calculation_status: >-
+            {% set raw_text = states('sensor.meshcore_01c1a4fa32_bat_laguna2') %}
+            {% set offset_text = states('input_number.meshcore_laguna2_voltage_offset') %}
+            {% set empty_text = states('input_number.meshcore_laguna2_empty_voltage') %}
+            {% set full_text = states('input_number.meshcore_laguna2_full_voltage') %}
+            {% if not is_number(raw_text) %}
+              invalid_raw_voltage
+            {% elif not is_number(offset_text)
+                  or not is_number(empty_text)
+                  or not is_number(full_text) %}
+              invalid_calibration_helper
+            {% elif (full_text | float) <= (empty_text | float) %}
+              invalid_calibration_range
+            {% elif ((raw_text | float) + (offset_text | float)) < 2.5
+                  or ((raw_text | float) + (offset_text | float)) > 5.0 %}
+              invalid_calibrated_voltage
+            {% else %}
+              valid
+            {% endif %}
+
+      # Temporary migration entities. Keep the legacy calibrated entities
+      # enabled until this repeater has completed comparison and rollback tests.
+      - name: ProMicro Test Repeater BI Calibrated Voltage
+        default_entity_id: sensor.promicro_test_repeater_bi_calibrated_voltage
+        unique_id: meshcore_promicro_test_repeater_bi_calibrated_voltage
+        device_class: voltage
+        state_class: measurement
+        unit_of_measurement: V
+        availability: >-
+          {% set raw_text = states('sensor.meshcore_04560eba43_bat_promicro_test_repeater') %}
+          {% set offset_text = states('input_number.meshcore_promicro_test_repeater_voltage_offset') %}
+          {% set empty_text = states('input_number.meshcore_promicro_test_repeater_empty_voltage') %}
+          {% set full_text = states('input_number.meshcore_promicro_test_repeater_full_voltage') %}
+          {% set inputs_valid =
+            is_number(raw_text) and
+            is_number(offset_text) and
+            is_number(empty_text) and
+            is_number(full_text)
+          %}
+          {% if inputs_valid %}
+            {% set calibrated = (raw_text | float) + (offset_text | float) %}
+            {{ (full_text | float) > (empty_text | float)
+               and calibrated >= 2.5
+               and calibrated <= 5.0 }}
+          {% else %}
+            false
+          {% endif %}
+        state: >-
+          {% set raw = states('sensor.meshcore_04560eba43_bat_promicro_test_repeater') | float %}
+          {% set offset = states('input_number.meshcore_promicro_test_repeater_voltage_offset') | float %}
+          {{ (raw + offset) | round(3) }}
+        attributes:
+          raw_voltage: >-
+            {% set value = states('sensor.meshcore_04560eba43_bat_promicro_test_repeater') %}
+            {{ (value | float) if is_number(value) else none }}
+          voltage_offset: >-
+            {% set value = states('input_number.meshcore_promicro_test_repeater_voltage_offset') %}
+            {{ (value | float) if is_number(value) else none }}
+          empty_voltage: >-
+            {% set value = states('input_number.meshcore_promicro_test_repeater_empty_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          full_voltage: >-
+            {% set value = states('input_number.meshcore_promicro_test_repeater_full_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          battery_profile: "18650 Li-ion"
+          calibration_schema_version: 1
+          calculation_status: >-
+            {% set raw_text = states('sensor.meshcore_04560eba43_bat_promicro_test_repeater') %}
+            {% set offset_text = states('input_number.meshcore_promicro_test_repeater_voltage_offset') %}
+            {% set empty_text = states('input_number.meshcore_promicro_test_repeater_empty_voltage') %}
+            {% set full_text = states('input_number.meshcore_promicro_test_repeater_full_voltage') %}
+            {% if not is_number(raw_text) %}
+              invalid_raw_voltage
+            {% elif not is_number(offset_text)
+                  or not is_number(empty_text)
+                  or not is_number(full_text) %}
+              invalid_calibration_helper
+            {% elif (full_text | float) <= (empty_text | float) %}
+              invalid_calibration_range
+            {% elif ((raw_text | float) + (offset_text | float)) < 2.5
+                  or ((raw_text | float) + (offset_text | float)) > 5.0 %}
+              invalid_calibrated_voltage
+            {% else %}
+              valid
+            {% endif %}
+
+      - name: ProMicro Test Repeater BI Battery Percentage
+        default_entity_id: sensor.promicro_test_repeater_bi_battery_percentage
+        unique_id: meshcore_promicro_test_repeater_bi_battery_percentage
+        device_class: battery
+        state_class: measurement
+        unit_of_measurement: "%"
+        availability: >-
+          {% set raw_text = states('sensor.meshcore_04560eba43_bat_promicro_test_repeater') %}
+          {% set offset_text = states('input_number.meshcore_promicro_test_repeater_voltage_offset') %}
+          {% set empty_text = states('input_number.meshcore_promicro_test_repeater_empty_voltage') %}
+          {% set full_text = states('input_number.meshcore_promicro_test_repeater_full_voltage') %}
+          {% set inputs_valid =
+            is_number(raw_text) and
+            is_number(offset_text) and
+            is_number(empty_text) and
+            is_number(full_text)
+          %}
+          {% if inputs_valid %}
+            {% set calibrated = (raw_text | float) + (offset_text | float) %}
+            {{ (full_text | float) > (empty_text | float)
+               and calibrated >= 2.5
+               and calibrated <= 5.0 }}
+          {% else %}
+            false
+          {% endif %}
+        state: >-
+          {% set raw = states('sensor.meshcore_04560eba43_bat_promicro_test_repeater') | float %}
+          {% set offset = states('input_number.meshcore_promicro_test_repeater_voltage_offset') | float %}
+          {% set empty = states('input_number.meshcore_promicro_test_repeater_empty_voltage') | float %}
+          {% set full = states('input_number.meshcore_promicro_test_repeater_full_voltage') | float %}
+          {% set calibrated = raw + offset %}
+          {% set percentage = ((calibrated - empty) / (full - empty)) * 100 %}
+          {{ [[percentage, 0] | max, 100] | min | round(0) }}
+        attributes:
+          raw_voltage: >-
+            {% set value = states('sensor.meshcore_04560eba43_bat_promicro_test_repeater') %}
+            {{ (value | float) if is_number(value) else none }}
+          voltage_offset: >-
+            {% set value = states('input_number.meshcore_promicro_test_repeater_voltage_offset') %}
+            {{ (value | float) if is_number(value) else none }}
+          empty_voltage: >-
+            {% set value = states('input_number.meshcore_promicro_test_repeater_empty_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          full_voltage: >-
+            {% set value = states('input_number.meshcore_promicro_test_repeater_full_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          battery_profile: "18650 Li-ion"
+          calibration_schema_version: 1
+          calculation_status: >-
+            {% set raw_text = states('sensor.meshcore_04560eba43_bat_promicro_test_repeater') %}
+            {% set offset_text = states('input_number.meshcore_promicro_test_repeater_voltage_offset') %}
+            {% set empty_text = states('input_number.meshcore_promicro_test_repeater_empty_voltage') %}
+            {% set full_text = states('input_number.meshcore_promicro_test_repeater_full_voltage') %}
+            {% if not is_number(raw_text) %}
+              invalid_raw_voltage
+            {% elif not is_number(offset_text)
+                  or not is_number(empty_text)
+                  or not is_number(full_text) %}
+              invalid_calibration_helper
+            {% elif (full_text | float) <= (empty_text | float) %}
+              invalid_calibration_range
+            {% elif ((raw_text | float) + (offset_text | float)) < 2.5
+                  or ((raw_text | float) + (offset_text | float)) > 5.0 %}
+              invalid_calibrated_voltage
+            {% else %}
+              valid
+            {% endif %}
+
+      # Temporary migration entities. Keep the legacy calibrated entities
+      # enabled until this repeater has completed comparison and rollback tests.
+      - name: Test Solar BI Calibrated Voltage
+        default_entity_id: sensor.test_solar_repeater_bi_calibrated_voltage
+        unique_id: meshcore_test_solar_bi_calibrated_voltage
+        device_class: voltage
+        state_class: measurement
+        unit_of_measurement: V
+        availability: >-
+          {% set raw_text = states('sensor.meshcore_23b033ff3a_bat_test_solar') %}
+          {% set offset_text = states('input_number.meshcore_test_solar_voltage_offset') %}
+          {% set empty_text = states('input_number.meshcore_test_solar_empty_voltage') %}
+          {% set full_text = states('input_number.meshcore_test_solar_full_voltage') %}
+          {% set inputs_valid =
+            is_number(raw_text) and
+            is_number(offset_text) and
+            is_number(empty_text) and
+            is_number(full_text)
+          %}
+          {% if inputs_valid %}
+            {% set calibrated = (raw_text | float) + (offset_text | float) %}
+            {{ (full_text | float) > (empty_text | float)
+               and calibrated >= 2.5
+               and calibrated <= 5.0 }}
+          {% else %}
+            false
+          {% endif %}
+        state: >-
+          {% set raw = states('sensor.meshcore_23b033ff3a_bat_test_solar') | float %}
+          {% set offset = states('input_number.meshcore_test_solar_voltage_offset') | float %}
+          {{ (raw + offset) | round(3) }}
+        attributes:
+          raw_voltage: >-
+            {% set value = states('sensor.meshcore_23b033ff3a_bat_test_solar') %}
+            {{ (value | float) if is_number(value) else none }}
+          voltage_offset: >-
+            {% set value = states('input_number.meshcore_test_solar_voltage_offset') %}
+            {{ (value | float) if is_number(value) else none }}
+          empty_voltage: >-
+            {% set value = states('input_number.meshcore_test_solar_empty_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          full_voltage: >-
+            {% set value = states('input_number.meshcore_test_solar_full_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          battery_profile: "18650 Li-ion"
+          calibration_schema_version: 1
+          calculation_status: >-
+            {% set raw_text = states('sensor.meshcore_23b033ff3a_bat_test_solar') %}
+            {% set offset_text = states('input_number.meshcore_test_solar_voltage_offset') %}
+            {% set empty_text = states('input_number.meshcore_test_solar_empty_voltage') %}
+            {% set full_text = states('input_number.meshcore_test_solar_full_voltage') %}
+            {% if not is_number(raw_text) %}
+              invalid_raw_voltage
+            {% elif not is_number(offset_text)
+                  or not is_number(empty_text)
+                  or not is_number(full_text) %}
+              invalid_calibration_helper
+            {% elif (full_text | float) <= (empty_text | float) %}
+              invalid_calibration_range
+            {% elif ((raw_text | float) + (offset_text | float)) < 2.5
+                  or ((raw_text | float) + (offset_text | float)) > 5.0 %}
+              invalid_calibrated_voltage
+            {% else %}
+              valid
+            {% endif %}
+
+      - name: Test Solar BI Battery Percentage
+        default_entity_id: sensor.test_solar_bi_battery_percentage
+        unique_id: meshcore_test_solar_bi_battery_percentage
+        device_class: battery
+        state_class: measurement
+        unit_of_measurement: "%"
+        availability: >-
+          {% set raw_text = states('sensor.meshcore_23b033ff3a_bat_test_solar') %}
+          {% set offset_text = states('input_number.meshcore_test_solar_voltage_offset') %}
+          {% set empty_text = states('input_number.meshcore_test_solar_empty_voltage') %}
+          {% set full_text = states('input_number.meshcore_test_solar_full_voltage') %}
+          {% set inputs_valid =
+            is_number(raw_text) and
+            is_number(offset_text) and
+            is_number(empty_text) and
+            is_number(full_text)
+          %}
+          {% if inputs_valid %}
+            {% set calibrated = (raw_text | float) + (offset_text | float) %}
+            {{ (full_text | float) > (empty_text | float)
+               and calibrated >= 2.5
+               and calibrated <= 5.0 }}
+          {% else %}
+            false
+          {% endif %}
+        state: >-
+          {% set raw = states('sensor.meshcore_23b033ff3a_bat_test_solar') | float %}
+          {% set offset = states('input_number.meshcore_test_solar_voltage_offset') | float %}
+          {% set empty = states('input_number.meshcore_test_solar_empty_voltage') | float %}
+          {% set full = states('input_number.meshcore_test_solar_full_voltage') | float %}
+          {% set calibrated = raw + offset %}
+          {% set percentage = ((calibrated - empty) / (full - empty)) * 100 %}
+          {{ [[percentage, 0] | max, 100] | min | round(0) }}
+        attributes:
+          raw_voltage: >-
+            {% set value = states('sensor.meshcore_23b033ff3a_bat_test_solar') %}
+            {{ (value | float) if is_number(value) else none }}
+          voltage_offset: >-
+            {% set value = states('input_number.meshcore_test_solar_voltage_offset') %}
+            {{ (value | float) if is_number(value) else none }}
+          empty_voltage: >-
+            {% set value = states('input_number.meshcore_test_solar_empty_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          full_voltage: >-
+            {% set value = states('input_number.meshcore_test_solar_full_voltage') %}
+            {{ (value | float) if is_number(value) else none }}
+          battery_profile: "18650 Li-ion"
+          calibration_schema_version: 1
+          calculation_status: >-
+            {% set raw_text = states('sensor.meshcore_23b033ff3a_bat_test_solar') %}
+            {% set offset_text = states('input_number.meshcore_test_solar_voltage_offset') %}
+            {% set empty_text = states('input_number.meshcore_test_solar_empty_voltage') %}
+            {% set full_text = states('input_number.meshcore_test_solar_full_voltage') %}
+            {% if not is_number(raw_text) %}
+              invalid_raw_voltage
+            {% elif not is_number(offset_text)
+                  or not is_number(empty_text)
+                  or not is_number(full_text) %}
+              invalid_calibration_helper
+            {% elif (full_text | float) <= (empty_text | float) %}
+              invalid_calibration_range
+            {% elif ((raw_text | float) + (offset_text | float)) < 2.5
+                  or ((raw_text | float) + (offset_text | float)) > 5.0 %}
+              invalid_calibrated_voltage
+            {% else %}
+              valid
+            {% endif %}

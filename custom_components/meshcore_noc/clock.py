@@ -1,0 +1,708 @@
+"""Event-driven manual clock intelligence for managed MeshCore repeaters."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import re
+from collections import deque
+from collections.abc import Callable, Mapping
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
+from enum import StrEnum
+from time import monotonic
+from typing import Any
+
+from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError, ServiceNotFound
+from homeassistant.util import dt as dt_util
+
+from .const import (
+    CLOCK_HISTORY_LIMIT,
+    CLOCK_RESPONSE_TIMEOUT,
+    MESHCORE_DOMAIN,
+    MESHCORE_RAW_EVENT,
+)
+
+_CLOCK_PATTERN = re.compile(
+    r"^\s*(?P<hour>\d{1,2}):(?P<minute>\d{2})\s*-\s*"
+    r"(?P<day>\d{1,2})/(?P<month>\d{1,2})/(?P<year>\d{4})\s+UTC\s*$"
+)
+_CONTACT_MESSAGE_EVENT = "EventType.CONTACT_MSG_RECV"
+_MAX_TEXT_TIMESTAMP_DIFFERENCE = 90
+_LOGGER = logging.getLogger(__name__)
+
+
+class ClockManagerError(HomeAssistantError):
+    """Base error for a rejected manual clock check."""
+
+
+class UnknownManagedRepeaterError(ClockManagerError):
+    """The requested stable ID is not a managed repeater target."""
+
+
+class ClockCheckInProgressError(ClockManagerError):
+    """A request is already pending for this repeater."""
+
+
+class ClockCheckCooldownError(ClockManagerError):
+    """The repeater is still inside its manual-command cooldown."""
+
+
+class ClockCheckFleetCollisionError(ClockManagerError):
+    """A manual check targets a repeater reserved by the active fleet run."""
+
+
+class ClockStatus(StrEnum):
+    """Clock drift severity."""
+
+    GREEN = "GREEN"
+    YELLOW = "YELLOW"
+    ORANGE = "ORANGE"
+    RED = "RED"
+    UNKNOWN = "UNKNOWN"
+
+
+class ClockCheckState(StrEnum):
+    """Observable lifecycle state for one manual check."""
+
+    QUEUED = "queued"
+    CALLING_SERVICE = "calling_service"
+    SENT = "sent"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    TIMED_OUT = "timed_out"
+
+
+class ClockAttemptOutcome(StrEnum):
+    """Latest completed clock-attempt outcome."""
+
+    SUCCESS = "success"
+    TIMEOUT = "timeout"
+    FAILED = "failed"
+    MALFORMED = "malformed"
+
+
+@dataclass(frozen=True, slots=True)
+class ClockTarget:
+    """Public addressing data for one managed repeater."""
+
+    stable_id: str
+    pubkey_prefix: str
+    meshcore_config_entry_id: str
+    label: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class NonAddressableRepeater:
+    """Diagnostic evidence for one managed device excluded from clock targets."""
+
+    stable_id: str
+    friendly_name: str
+    resolution_sources_checked: tuple[str, ...]
+    rejection_reason: str
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return service-safe diagnostic data."""
+        return {
+            "stable_id": self.stable_id,
+            "friendly_name": self.friendly_name,
+            "resolution_sources_checked": list(self.resolution_sources_checked),
+            "rejection_reason": self.rejection_reason,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ManagedRepeaterAddressability:
+    """Complete acceptance evidence for one configured managed device."""
+
+    stable_id: str
+    friendly_name: str
+    device_type: str
+    resolution_source: str | None
+    pubkey_prefix: str | None
+    resolution_sources_checked: tuple[str, ...]
+    accepted: bool
+    reason: str
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return complete safe addressability diagnostics."""
+        return {
+            "stable_id": self.stable_id,
+            "friendly_name": self.friendly_name,
+            "device_type": self.device_type,
+            "resolution_source": self.resolution_source,
+            "pubkey_prefix": self.pubkey_prefix,
+            "resolution_sources_checked": list(self.resolution_sources_checked),
+            "accepted": self.accepted,
+            "reason": self.reason,
+        }
+
+
+@dataclass(slots=True)
+class ClockResult:
+    """Latest clock state and request lifecycle for one repeater."""
+
+    stable_id: str
+    pubkey_prefix: str
+    state: ClockCheckState = ClockCheckState.QUEUED
+    last_clock_check: datetime | None = None
+    last_clock_reply: datetime | None = None
+    clock_offset_seconds: int | None = None
+    clock_status: ClockStatus = ClockStatus.UNKNOWN
+    clock_rtt_ms: int | None = None
+    response_text: str | None = None
+    sender_timestamp: int | None = None
+    service_response: Any = None
+    error: str | None = None
+    last_successful_clock_check: datetime | None = None
+    last_clock_attempt: datetime | None = None
+    last_clock_attempt_outcome: ClockAttemptOutcome | None = None
+    last_clock_attempt_error: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return a Home Assistant service-response-safe representation."""
+        return {
+            "stable_id": self.stable_id,
+            "pubkey_prefix": self.pubkey_prefix,
+            "state": self.state,
+            "last_clock_check": self.last_clock_check,
+            "last_clock_reply": self.last_clock_reply,
+            "clock_offset_seconds": self.clock_offset_seconds,
+            "clock_status": self.clock_status,
+            "clock_rtt_ms": self.clock_rtt_ms,
+            "response_text": self.response_text,
+            "sender_timestamp": self.sender_timestamp,
+            "service_response": self.service_response,
+            "error": self.error,
+            "last_successful_clock_check": self.last_successful_clock_check,
+            "last_clock_attempt": self.last_clock_attempt,
+            "last_clock_attempt_outcome": self.last_clock_attempt_outcome,
+            "last_clock_attempt_error": self.last_clock_attempt_error,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ClockHistoryEntry:
+    """Bounded audit record for one completed check attempt."""
+
+    stable_id: str
+    pubkey_prefix: str
+    requested_at: datetime
+    completed_at: datetime
+    state: ClockCheckState
+    response_text: str | None
+    sender_timestamp: int | None
+    clock_offset_seconds: int | None
+    clock_status: ClockStatus
+    clock_rtt_ms: int | None
+    error: str | None
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return diagnostics-safe history data."""
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class _PendingClockRequest:
+    target: ClockTarget
+    requested_at: datetime
+    started_monotonic: float
+    future: asyncio.Future[ClockResult]
+
+
+def parse_clock_text(text: str) -> datetime:
+    """Parse the public MeshCore repeater clock response as UTC."""
+    match = _CLOCK_PATTERN.fullmatch(text)
+    if match is None:
+        raise ValueError("clock response does not match HH:MM - D/M/YYYY UTC")
+    values = {key: int(value) for key, value in match.groupdict().items()}
+    return datetime(
+        values["year"],
+        values["month"],
+        values["day"],
+        values["hour"],
+        values["minute"],
+        tzinfo=UTC,
+    )
+
+
+def calculate_clock_offset(sender_timestamp: int, received_at: datetime) -> int:
+    """Return signed seconds: positive ahead, negative behind."""
+    if received_at.tzinfo is None:
+        received_at = received_at.replace(tzinfo=UTC)
+    return round(sender_timestamp - received_at.timestamp())
+
+
+def classify_clock_status(offset_seconds: int | None) -> ClockStatus:
+    """Classify absolute drift using the Phase 1 thresholds."""
+    if offset_seconds is None:
+        return ClockStatus.UNKNOWN
+    absolute_offset = abs(offset_seconds)
+    if absolute_offset <= 30:
+        return ClockStatus.GREEN
+    if absolute_offset <= 120:
+        return ClockStatus.YELLOW
+    if absolute_offset <= 300:
+        return ClockStatus.ORANGE
+    return ClockStatus.RED
+
+
+def clock_status_label(status: ClockStatus) -> str:
+    """Return the user-facing Clock Status sensor value."""
+    return {
+        ClockStatus.UNKNOWN: "Unknown",
+        ClockStatus.GREEN: "In Sync",
+        ClockStatus.YELLOW: "Minor Drift",
+        ClockStatus.ORANGE: "Drift",
+        ClockStatus.RED: "Critical",
+    }[status]
+
+
+class MeshCoreNocClockManager:
+    """Issue and correlate manual clock checks using public HA interfaces."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        targets: Mapping[str, ClockTarget],
+        *,
+        managed_repeaters: Mapping[str, str] | None = None,
+        non_addressable_repeaters: tuple[NonAddressableRepeater, ...] = (),
+        managed_repeater_addressability: tuple[ManagedRepeaterAddressability, ...] = (),
+        cooldown_seconds: int,
+        timeout_seconds: float = CLOCK_RESPONSE_TIMEOUT,
+        now: Callable[[], datetime] = dt_util.utcnow,
+        monotonic_time: Callable[[], float] = monotonic,
+    ) -> None:
+        """Initialize without accessing MeshCore integration internals."""
+        self.hass = hass
+        self.targets = dict(targets)
+        self.managed_repeaters = dict(managed_repeaters or targets)
+        self.non_addressable_repeaters = non_addressable_repeaters
+        self.managed_repeater_addressability = managed_repeater_addressability
+        self.cooldown_seconds = cooldown_seconds
+        self.timeout_seconds = timeout_seconds
+        self._now = now
+        self._monotonic = monotonic_time
+        self._pending: dict[str, _PendingClockRequest] = {}
+        self._results = {
+            stable_id: ClockResult(stable_id, target.pubkey_prefix)
+            for stable_id, target in self.targets.items()
+        }
+        self._last_request_monotonic: dict[str, float] = {}
+        self._history: deque[ClockHistoryEntry] = deque(maxlen=CLOCK_HISTORY_LIMIT)
+        self._listeners: dict[str, list[Callable[[], None]]] = {}
+        self._fleet_run_id: str | None = None
+        self._fleet_reserved_ids: set[str] = set()
+        self._unsub_raw_event: Callable[[], None] | None = None
+        self.last_request: dict[str, Any] | None = None
+        self.last_response: dict[str, Any] | None = None
+        self.last_parse_result: dict[str, Any] | None = None
+        self.last_timeout: dict[str, Any] | None = None
+
+    @property
+    def outstanding_requests(self) -> list[dict[str, Any]]:
+        """Return diagnostics for active requests without exposing internals."""
+        return [
+            {
+                "stable_id": pending.target.stable_id,
+                "pubkey_prefix": pending.target.pubkey_prefix,
+                "requested_at": pending.requested_at,
+            }
+            for pending in self._pending.values()
+        ]
+
+    @property
+    def history(self) -> list[dict[str, Any]]:
+        """Return the rolling last-20 history."""
+        return [entry.as_dict() for entry in self._history]
+
+    def result_for(self, stable_id: str) -> ClockResult | None:
+        """Return current clock information for a managed target."""
+        return self._results.get(stable_id)
+
+    def clock_data_age_seconds(self, stable_id: str) -> int | None:
+        """Return age of the retained successful reading."""
+        result = self.result_for(stable_id)
+        if result is None or result.last_successful_clock_check is None:
+            return None
+        return max(
+            0,
+            round(
+                (self._utc_now() - result.last_successful_clock_check).total_seconds()
+            ),
+        )
+
+    @property
+    def fleet_health(self) -> dict[str, Any]:
+        """Summarize retained clock health across addressable repeaters."""
+        counts = {status: 0 for status in ClockStatus}
+        names = {ClockStatus.ORANGE: [], ClockStatus.RED: []}
+        for stable_id, result in self._results.items():
+            counts[result.clock_status] += 1
+            if result.clock_status in names:
+                names[result.clock_status].append(self.targets[stable_id].label)
+        return {
+            "in_sync": counts[ClockStatus.GREEN],
+            "minor_drift": counts[ClockStatus.YELLOW],
+            "drift": counts[ClockStatus.ORANGE],
+            "critical": counts[ClockStatus.RED],
+            "unknown": counts[ClockStatus.UNKNOWN],
+            "drift_repeaters": sorted(names[ClockStatus.ORANGE]),
+            "critical_repeaters": sorted(names[ClockStatus.RED]),
+        }
+
+    def reserve_fleet_targets(self, run_id: str, stable_ids: tuple[str, ...]) -> None:
+        """Reserve one immutable fleet snapshot against manual overlap."""
+        if self._fleet_run_id is not None:
+            raise ClockCheckFleetCollisionError(
+                f"Fleet clock run {self._fleet_run_id} already owns the queue"
+            )
+        self._fleet_run_id = run_id
+        self._fleet_reserved_ids = set(stable_ids)
+
+    def release_fleet_targets(self, run_id: str) -> None:
+        """Release reservations owned by one completed fleet run."""
+        if self._fleet_run_id == run_id:
+            self._fleet_run_id = None
+            self._fleet_reserved_ids.clear()
+
+    def async_start(self) -> None:
+        """Subscribe once to the public raw MeshCore event."""
+        if self._unsub_raw_event is None:
+            self._unsub_raw_event = self.hass.bus.async_listen(
+                MESHCORE_RAW_EVENT, self._async_handle_raw_event
+            )
+
+    @callback
+    def async_stop(self) -> None:
+        """Unsubscribe and cancel all outstanding requests."""
+        if self._unsub_raw_event is not None:
+            self._unsub_raw_event()
+            self._unsub_raw_event = None
+        for pending in self._pending.values():
+            if not pending.future.done():
+                pending.future.cancel()
+        self._pending.clear()
+
+    @callback
+    def async_add_listener(
+        self, stable_id: str, listener: Callable[[], None]
+    ) -> Callable[[], None]:
+        """Notify a managed repeater's entities after clock state changes."""
+        listeners = self._listeners.setdefault(stable_id, [])
+        listeners.append(listener)
+
+        @callback
+        def remove_listener() -> None:
+            if listener in listeners:
+                listeners.remove(listener)
+
+        return remove_listener
+
+    def resolve_target(self, supplied_identifier: str) -> ClockTarget:
+        """Resolve a stable ID, or a unique exact-prefix compatibility value."""
+        target = self.targets.get(supplied_identifier)
+        if target is None:
+            prefix_matches = [
+                candidate
+                for candidate in self.targets.values()
+                if candidate.pubkey_prefix == supplied_identifier.lower()
+            ]
+            if len(prefix_matches) == 1:
+                target = prefix_matches[0]
+        if target is not None:
+            _LOGGER.debug(
+                "Clock target resolved: supplied_stable_id=%s "
+                "managed_repeater=%s pubkey_prefix=%s",
+                supplied_identifier,
+                target.stable_id,
+                target.pubkey_prefix,
+            )
+            return target
+
+        managed = supplied_identifier in self.managed_repeaters
+        addressable = supplied_identifier in self.targets
+        valid = [
+            f"{target.stable_id} ({target.label})"
+            for target in sorted(self.targets.values(), key=lambda item: item.label)
+        ]
+        raise UnknownManagedRepeaterError(
+            f"Invalid clock target {supplied_identifier!r}: managed={managed}, "
+            f"addressable={addressable}. Valid managed addressable repeaters: "
+            f"{valid or 'none'}"
+        )
+
+    async def async_check_clock(
+        self, stable_id: str, *, fleet_run_id: str | None = None
+    ) -> ClockResult:
+        """Run one manual read-only clock check and await its public reply."""
+        supplied_identifier = stable_id
+        target = self.resolve_target(supplied_identifier)
+        stable_id = target.stable_id
+        if stable_id in self._fleet_reserved_ids and fleet_run_id != self._fleet_run_id:
+            raise ClockCheckFleetCollisionError(
+                f"{stable_id!r} is queued or running in fleet clock run "
+                f"{self._fleet_run_id}"
+            )
+        prefix = target.pubkey_prefix.lower()
+        if prefix in self._pending:
+            raise ClockCheckInProgressError(
+                f"A clock check is already pending for {stable_id}"
+            )
+        now_monotonic = self._monotonic()
+        last_request = self._last_request_monotonic.get(prefix)
+        if (
+            last_request is not None
+            and now_monotonic - last_request < self.cooldown_seconds
+        ):
+            remaining = self.cooldown_seconds - (now_monotonic - last_request)
+            raise ClockCheckCooldownError(
+                f"Clock check cooldown active for {stable_id}; "
+                f"retry in {remaining:.0f} seconds"
+            )
+
+        requested_at = self._utc_now()
+        result = self._results[stable_id]
+        result.state = ClockCheckState.QUEUED
+        result.last_clock_check = requested_at
+        result.last_clock_attempt = requested_at
+        result.last_clock_attempt_outcome = None
+        result.last_clock_attempt_error = None
+        result.error = None
+        result.response_text = None
+        result.sender_timestamp = None
+        result.clock_rtt_ms = None
+        result.service_response = None
+        future: asyncio.Future[ClockResult] = asyncio.get_running_loop().create_future()
+        pending = _PendingClockRequest(
+            target=target,
+            requested_at=requested_at,
+            started_monotonic=now_monotonic,
+            future=future,
+        )
+        self._pending[prefix] = pending
+        self._last_request_monotonic[prefix] = now_monotonic
+        self.last_request = {
+            "stable_id": stable_id,
+            "pubkey_prefix": target.pubkey_prefix,
+            "requested_at": requested_at,
+            "command": "clock",
+        }
+        self._notify(stable_id)
+
+        try:
+            if not self.hass.services.has_service(MESHCORE_DOMAIN, "execute_command"):
+                return self._finish_failure(
+                    pending, "meshcore.execute_command unavailable"
+                )
+
+            result.state = ClockCheckState.CALLING_SERVICE
+            self._notify(stable_id)
+            try:
+                command = f'send_cmd {target.pubkey_prefix} "clock"'
+                _LOGGER.debug(
+                    "Dispatching managed repeater clock command: stable_id=%s "
+                    "pubkey_prefix=%s command=%s",
+                    stable_id,
+                    target.pubkey_prefix,
+                    command,
+                )
+                service_response = await self.hass.services.async_call(
+                    MESHCORE_DOMAIN,
+                    "execute_command",
+                    {"command": command},
+                    blocking=True,
+                    return_response=True,
+                )
+            except (HomeAssistantError, ServiceNotFound) as err:
+                return self._finish_failure(pending, str(err))
+            except Exception as err:  # noqa: BLE001 - service boundary
+                return self._finish_failure(pending, f"service call failed: {err}")
+
+            result.service_response = service_response
+            if future.done():
+                return future.result()
+            if not isinstance(service_response, dict):
+                return self._finish_failure(
+                    pending, "MeshCore send confirmation unavailable"
+                )
+            if service_response.get("error"):
+                return self._finish_failure(
+                    pending, f"MeshCore send failed: {service_response['error']}"
+                )
+            result.state = ClockCheckState.SENT
+            self._notify(stable_id)
+
+            try:
+                async with asyncio.timeout(self.timeout_seconds):
+                    return await future
+            except TimeoutError:
+                completed_at = self._utc_now()
+                result.state = ClockCheckState.TIMED_OUT
+                result.error = "clock response timed out"
+                result.last_clock_attempt_outcome = ClockAttemptOutcome.TIMEOUT
+                result.last_clock_attempt_error = result.error
+                self.last_timeout = {
+                    "stable_id": stable_id,
+                    "pubkey_prefix": target.pubkey_prefix,
+                    "requested_at": requested_at,
+                    "timed_out_at": completed_at,
+                }
+                self._append_history(result, requested_at, completed_at)
+                self._notify(stable_id)
+                return result
+        finally:
+            self._pending.pop(prefix, None)
+
+    @callback
+    def _async_handle_raw_event(self, event: Event) -> None:
+        """Process only public CONTACT_MSG_RECV events."""
+        data = event.data
+        if data.get("event_type") != _CONTACT_MESSAGE_EVENT:
+            return
+        payload = data.get("payload")
+        if not isinstance(payload, dict):
+            return
+        pubkey_prefix = str(payload.get("pubkey_prefix", "")).lower()
+        pending = self._pending.get(pubkey_prefix)
+        if pending is None or pending.future.done():
+            return
+
+        received_at = self._utc_now()
+        text = payload.get("text")
+        sender_timestamp = payload.get("sender_timestamp")
+        self.last_response = {
+            "stable_id": pending.target.stable_id,
+            "pubkey_prefix": pubkey_prefix,
+            "received_at": received_at,
+            "text": text,
+            "sender_timestamp": sender_timestamp,
+            "SNR": payload.get("SNR"),
+        }
+        if not isinstance(text, str):
+            self._complete_parse_failure(pending, received_at, "missing clock text")
+            return
+        try:
+            parsed = parse_clock_text(text)
+        except (TypeError, ValueError) as err:
+            self._complete_parse_failure(pending, received_at, str(err), text=text)
+            return
+        if not isinstance(sender_timestamp, int) or isinstance(sender_timestamp, bool):
+            self._complete_parse_failure(
+                pending, received_at, "invalid sender_timestamp", text=text
+            )
+            return
+        if abs(parsed.timestamp() - sender_timestamp) > _MAX_TEXT_TIMESTAMP_DIFFERENCE:
+            self._complete_parse_failure(
+                pending,
+                received_at,
+                "clock text and sender_timestamp disagree",
+                text=text,
+            )
+            return
+
+        result = self._results[pending.target.stable_id]
+        result.state = ClockCheckState.COMPLETED
+        result.last_clock_reply = received_at
+        result.response_text = text
+        result.sender_timestamp = sender_timestamp
+        result.clock_rtt_ms = max(
+            0, round((self._monotonic() - pending.started_monotonic) * 1000)
+        )
+        result.clock_offset_seconds = calculate_clock_offset(
+            sender_timestamp, received_at
+        )
+        result.clock_status = classify_clock_status(result.clock_offset_seconds)
+        result.error = None
+        result.last_successful_clock_check = received_at
+        result.last_clock_attempt_outcome = ClockAttemptOutcome.SUCCESS
+        result.last_clock_attempt_error = None
+        self.last_parse_result = {
+            "stable_id": result.stable_id,
+            "success": True,
+            "parsed_clock": parsed,
+            "clock_offset_seconds": result.clock_offset_seconds,
+        }
+        self._append_history(
+            result, pending.requested_at, received_at, include_reply=True
+        )
+        self._notify(result.stable_id)
+        pending.future.set_result(result)
+
+    def _complete_parse_failure(
+        self,
+        pending: _PendingClockRequest,
+        received_at: datetime,
+        error: str,
+        *,
+        text: str | None = None,
+    ) -> None:
+        result = self._results[pending.target.stable_id]
+        result.state = ClockCheckState.FAILED
+        result.error = error
+        result.last_clock_attempt_outcome = ClockAttemptOutcome.MALFORMED
+        result.last_clock_attempt_error = error
+        result.last_clock_reply = received_at
+        result.response_text = text
+        self.last_parse_result = {
+            "stable_id": result.stable_id,
+            "success": False,
+            "error": error,
+            "text": text,
+        }
+        self._append_history(
+            result, pending.requested_at, received_at, include_reply=True
+        )
+        self._notify(result.stable_id)
+        pending.future.set_result(result)
+
+    def _finish_failure(self, pending: _PendingClockRequest, error: str) -> ClockResult:
+        completed_at = self._utc_now()
+        result = self._results[pending.target.stable_id]
+        result.state = ClockCheckState.FAILED
+        result.error = error
+        result.last_clock_attempt_outcome = ClockAttemptOutcome.FAILED
+        result.last_clock_attempt_error = error
+        self._append_history(result, pending.requested_at, completed_at)
+        self._notify(result.stable_id)
+        return result
+
+    def _append_history(
+        self,
+        result: ClockResult,
+        requested_at: datetime,
+        completed_at: datetime,
+        *,
+        include_reply: bool = False,
+    ) -> None:
+        successful = result.state is ClockCheckState.COMPLETED
+        self._history.append(
+            ClockHistoryEntry(
+                stable_id=result.stable_id,
+                pubkey_prefix=result.pubkey_prefix,
+                requested_at=requested_at,
+                completed_at=completed_at,
+                state=result.state,
+                response_text=result.response_text if include_reply else None,
+                sender_timestamp=(result.sender_timestamp if successful else None),
+                clock_offset_seconds=(
+                    result.clock_offset_seconds if successful else None
+                ),
+                clock_status=(
+                    result.clock_status if successful else ClockStatus.UNKNOWN
+                ),
+                clock_rtt_ms=result.clock_rtt_ms if successful else None,
+                error=result.error,
+            )
+        )
+
+    def _utc_now(self) -> datetime:
+        now = self._now()
+        return now.replace(tzinfo=UTC) if now.tzinfo is None else now.astimezone(UTC)
+
+    @callback
+    def _notify(self, stable_id: str) -> None:
+        for listener in tuple(self._listeners.get(stable_id, ())):
+            listener()

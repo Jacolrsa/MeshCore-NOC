@@ -1,0 +1,41 @@
+# Python bytecode and environments
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Test, type-check, and lint caches
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+
+# Home Assistant runtime and secrets
+.storage/
+deps/
+home-assistant.log*
+home-assistant_v2.db*
+secrets.yaml
+
+# Frontend dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Operating-system temporary files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.tmp
+*.temp
+.tmp.driveupload/

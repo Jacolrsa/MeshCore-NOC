@@ -1,0 +1,149 @@
+{
+  "services": {
+    "check_clock": {
+      "name": "Check repeater clock",
+      "description": "Run one manual read-only clock check for a managed, addressable MeshCore repeater.",
+      "fields": {
+        "stable_id": {
+          "name": "Managed repeater",
+          "description": "NOC stable identifier. Friendly names are display-only."
+        }
+      }
+    },
+    "check_all_clocks": {
+      "name": "Check all clocks",
+      "description": "Start one serialized clock check for every managed, addressable repeater.",
+      "fields": {}
+    },
+    "cancel_clock_check": {
+      "name": "Cancel clock check",
+      "description": "Stop the active fleet run before dispatching its next repeater.",
+      "fields": {}
+    }
+  },
+  "config": {
+    "abort": {
+      "meshcore_not_installed": "The MeshCore integration must be installed and configured before MeshCore NOC can be added.",
+      "single_instance_allowed": "Only one MeshCore NOC configuration is allowed."
+    },
+    "error": {
+      "invalid_repeater_selection": "The selected repeater is no longer available from MeshCore.",
+      "invalid_update_channel": "Select either the Stable or Development update channel.",
+      "invalid_clock_check_cooldown": "Clock check cooldown must be between 60 and 3600 seconds.",
+      "invalid_fleet_clock_options": "Fleet clock timing options are outside their safe bounds."
+    },
+    "step": {
+      "user": {
+        "data": {
+          "managed_repeater_ids": "MeshCore devices to manage",
+          "clock_check_cooldown": "Manual clock check cooldown",
+          "auto_fleet_clock_checks": "Enable automatic fleet clock checks",
+          "fleet_clock_interval_hours": "Automatic fleet interval",
+          "fleet_success_delay": "Delay after a successful check",
+          "fleet_failure_delay": "Delay after a failed or timed-out check",
+          "fleet_rotating_start": "Rotate the first repeater",
+          "update_channel": "Update channel"
+        },
+        "data_description": {
+          "clock_check_cooldown": "Minimum seconds between manual clock checks for the same managed repeater.",
+          "auto_fleet_clock_checks": "Disabled by default. The first automatic run is scheduled after the configured interval.",
+          "fleet_clock_interval_hours": "Hours between automatic serialized fleet runs.",
+          "fleet_success_delay": "Seconds to wait after a successful repeater check before dispatching the next.",
+          "fleet_failure_delay": "Seconds to wait after a failed or timed-out check before continuing.",
+          "fleet_rotating_start": "Start each completed fleet run at the next repeater while preserving managed order.",
+          "update_channel": "Stable is recommended and receives published production releases. Development receives testing builds from v4-development and may contain unfinished changes."
+        },
+        "description": "Select repeaters and clients to add to NOC. Device types and names are presentation only; stable MeshCore identifiers are stored.",
+        "title": "Select MeshCore devices"
+      }
+    }
+  },
+  "entity": {
+    "update": {
+      "update": {
+        "name": "Update"
+      }
+    },
+    "binary_sensor": {
+      "clock_check_running": {
+        "name": "Clock Check Running"
+      },
+      "freshness": {
+        "name": "Freshness"
+      }
+    },
+    "sensor": {
+      "clock_check_progress": {
+        "name": "Clock Check Progress"
+      },
+      "clock_check_state": {
+        "name": "Clock Check State"
+      },
+        "last_fleet_clock_check": {
+          "name": "Last Fleet Clock Check"
+        },
+        "fleet_clock_health": {
+          "name": "Fleet Clock Health"
+        },
+      "calibrated_battery": {
+        "name": "Calibrated Battery"
+      },
+      "calibrated_voltage": {
+        "name": "Calibrated Voltage"
+      },
+      "clock_offset": {
+        "name": "Clock Offset"
+      },
+      "clock_status": {
+        "name": "Clock Status"
+      },
+      "health": {
+        "name": "Health"
+      }
+    },
+      "button": {
+        "check_clock": {
+          "name": "Check Clock"
+        },
+        "check_all_clocks": {
+        "name": "Check All Clocks"
+      },
+      "cancel_clock_check": {
+        "name": "Cancel Clock Check"
+      }
+    }
+  },
+  "options": {
+    "error": {
+      "invalid_repeater_selection": "The selected repeater is no longer available from MeshCore.",
+      "invalid_update_channel": "Select either the Stable or Development update channel.",
+      "invalid_clock_check_cooldown": "Clock check cooldown must be between 60 and 3600 seconds.",
+      "invalid_fleet_clock_options": "Fleet clock timing options are outside their safe bounds."
+    },
+    "step": {
+      "init": {
+        "data": {
+          "managed_repeater_ids": "Managed MeshCore devices",
+          "clock_check_cooldown": "Manual clock check cooldown",
+          "auto_fleet_clock_checks": "Enable automatic fleet clock checks",
+          "fleet_clock_interval_hours": "Automatic fleet interval",
+          "fleet_success_delay": "Delay after a successful check",
+          "fleet_failure_delay": "Delay after a failed or timed-out check",
+          "fleet_rotating_start": "Rotate the first repeater",
+          "update_channel": "Update channel"
+        },
+        "data_description": {
+          "clock_check_cooldown": "Minimum seconds between manual clock checks for the same managed repeater.",
+          "auto_fleet_clock_checks": "Disabled by default. The first automatic run is scheduled after the configured interval.",
+          "fleet_clock_interval_hours": "Hours between automatic serialized fleet runs.",
+          "fleet_success_delay": "Seconds to wait after a successful repeater check before dispatching the next.",
+          "fleet_failure_delay": "Seconds to wait after a failed or timed-out check before continuing.",
+          "fleet_rotating_start": "Start each completed fleet run at the next repeater while preserving managed order.",
+          "update_channel": "Stable is recommended and receives published production releases. Development receives testing builds from v4-development and may contain unfinished changes."
+        },
+        "description": "Selected repeaters and clients are managed by NOC. Unselected devices remain available from MeshCore.",
+        "title": "Manage MeshCore devices"
+      }
+    }
+  }
+}

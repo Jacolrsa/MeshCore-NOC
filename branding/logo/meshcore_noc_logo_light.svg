@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="360" viewBox="0 0 1400 360" role="img" aria-labelledby="title desc">
+  <title id="title">MeshCore NOC</title>
+  <desc id="desc">Network Operations Centre for MeshCore. Monitor, Analyse, Operate.</desc>
+  <defs>
+    <linearGradient id="signal" x1="30" y1="30" x2="330" y2="330" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4DA3FF"/>
+      <stop offset="1" stop-color="#36C96B"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 24)">
+    <path d="M156 12 292 91v158l-136 79L20 249V91Z" fill="none" stroke="url(#signal)" stroke-width="22" stroke-linejoin="round"/>
+    <g fill="none" stroke="#13212B" stroke-width="14" stroke-linecap="round">
+      <path d="m156 170-70-49M156 170l70-49M156 170l70 64M156 170l-70 64"/>
+    </g>
+    <g fill="#15212B" stroke="url(#signal)" stroke-width="14">
+      <circle cx="156" cy="170" r="38"/><circle cx="86" cy="121" r="22"/>
+      <circle cx="226" cy="121" r="22"/><circle cx="226" cy="234" r="22"/>
+      <circle cx="86" cy="234" r="22"/>
+    </g>
+    <circle cx="156" cy="170" r="10" fill="#13212B"/>
+  </g>
+  <g fill="#13212B" font-family="Inter, Segoe UI, Arial, sans-serif">
+    <text x="390" y="148" font-size="104" font-weight="750" letter-spacing="-2">MeshCore NOC</text>
+    <text x="396" y="206" font-size="32" font-weight="600" letter-spacing="1">NETWORK OPERATIONS CENTRE FOR MESHCORE</text>
+    <text x="396" y="260" font-size="27" font-weight="500" letter-spacing="4">MONITOR &#8226; ANALYSE &#8226; OPERATE</text>
+    <text x="396" y="309" fill="#8293A1" font-size="23" font-weight="500">Independent Community Project</text>
+  </g>
+</svg>

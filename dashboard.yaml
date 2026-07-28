@@ -1,0 +1,3631 @@
+# ==============================================================
+# MeshCore NOC v2.0.1
+#
+# Changes:
+# - Active alerts moved into the top status strip
+# - Bottom alert card removed
+# - All content remains visible on one screen
+# - Eight repeaters remain in equal-sized cards
+# - Test Solar remains included in the graph and calculations
+#
+# Requires:
+# - Button Card v7.0.1
+# - ApexCharts Card
+# - Layout Card
+# - Card Mod
+# ==============================================================
+
+button_card_templates:
+
+  # ============================================================
+  # TOP NETWORK STATUS STRIP
+  # ============================================================
+  meshcore_status_strip:
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: false
+    triggers_update: all
+    tap_action: {action: none}
+    hold_action: {action: none}
+    custom_fields:
+      content: |
+        [[[
+          const nodes = [
+            ["ProMicro","sensor.promicro_repeater_bi_calibrated_voltage","sensor.promicro_repeater_bi_battery_percentage"],
+            ["Myburgh Park","sensor.myburgh_park_bi_calibrated_voltage","sensor.myburgh_park_bi_battery_percentage"],
+            ["Saldanha","sensor.saldanha_repeater_bi_calibrated_voltage","sensor.saldanha_repeater_bi_battery_percentage"],
+            ["Vredenburg","sensor.vredenburg_bi_calibrated_voltage","sensor.vredenburg_bi_battery_percentage"],
+            ["Vredenburg NE","sensor.vredenburg_ne_bi_calibrated_voltage","sensor.vredenburg_ne_bi_battery_percentage"],
+            ["Laguna 2","sensor.laguna2_repeater_bi_calibrated_voltage","sensor.laguna2_bi_battery_percentage"],
+            ["ProMicro Test","sensor.promicro_test_repeater_bi_calibrated_voltage","sensor.promicro_test_repeater_bi_battery_percentage"],
+            ["Test Solar","sensor.test_solar_repeater_bi_calibrated_voltage","sensor.test_solar_bi_battery_percentage"]];
+          const model=nodes.map(([name,vId,bId])=>{const ve=states[vId],be=states[bId],v=Number(ve?ve.state:NaN),b=Number(be?be.state:NaN),vv=!!(ve&&Number.isFinite(v)&&v>=0),valid=!!(vv&&be&&Number.isFinite(b)&&b>=0),age=vv&&ve.last_updated?Math.max(0,Math.floor((Date.now()-new Date(ve.last_updated).getTime())/1000)):Infinity;return{name,v,b,vv,valid,age};});
+          const online=model.filter(n=>n.vv&&n.age<=10800).length,warnings=model.filter(n=>n.valid&&(n.v<3.60||n.b<40)).length,critical=model.filter(n=>!n.valid||n.age>10800||n.v<3.30||n.b<20).length;
+          const valid=model.filter(n=>n.valid), volts=model.filter(n=>n.vv), alerts=[];
+          model.forEach(n=>{if(!n.valid){alerts.push(["#ea4335",n.name+": no telemetry"]);return;}if(n.age>10800){alerts.push(["#ea4335",n.name+": offline"]);return;}if(n.b<20||n.v<3.30){alerts.push(["#ea4335",n.name+": critical "+Math.round(n.b)+"%, "+n.v.toFixed(3)+" V"]);return;}if(n.b<40||n.v<3.60)alerts.push(["#ff9800",n.name+": warning "+Math.round(n.b)+"%, "+n.v.toFixed(3)+" V"]);if(n.age>5400)alerts.push(["#ff9800",n.name+": stale telemetry"]);});
+          const avg=(xs,key,d,suffix)=>xs.length?(xs.reduce((a,n)=>a+n[key],0)/xs.length).toFixed(d)+suffix:"&mdash;", stat=(c,l,v,i="&#9679;")=>`<div class="noc-stat"><span style="color:${c}">${i}</span><small>${l}</small><b>${v}</b></div>`;
+          const alertHtml=alerts.length?`<div class="alert-head"><small>ACTIVE ALERTS</small><b>${alerts.length} active</b></div><div class="alert-scroll"><div class="alert-track">${alerts.map(a=>`<div class="alert-chip"><span style="color:${a[0]}">&#9679;</span><span>${a[1]}</span></div>`).join("")}</div></div>`:`<div class="alert-ok"><span>&#9679;</span><span><small>ACTIVE ALERTS</small><b>No active alerts</b></span></div>`;
+          return `<div class="noc-strip"><div class="noc-title"><b>MeshCore NOC</b><span>Network Monitor</span></div><div class="noc-alerts">${alertHtml}</div>${stat("#34a853","ONLINE",online)}${stat("#ff9800","WARNINGS",warnings)}${stat("#ea4335","CRITICAL",critical)}${stat("#555","AVG BATTERY",valid.length?Math.round(valid.reduce((a,n)=>a+n.b,0)/valid.length)+"%":"&mdash;","&#128267;")}${stat("#555","AVG VOLTAGE",avg(volts,"v",3," V"),"&#9889;")}${stat("#555","UPDATED",new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}),"&#128339;")}</div>`;
+        ]]]
+    styles:
+      card:
+        - width: 100%
+        - min-width: 0
+        - max-width: none
+        - height: 68px
+        - max-height: 80px
+        - box-sizing: border-box
+        - border: 1px solid rgba(100,100,100,0.16)
+        - box-shadow: none
+        - border-radius: 12px
+        - padding: 8px 14px
+        - background: rgba(245,245,245,0.92)
+      grid:
+        - width: 100%
+        - min-width: 0
+        - grid-template-areas: '"content"'
+        - grid-template-columns: minmax(0,1fr)
+      custom_fields:
+        content: [{width: 100%}, {min-width: 0}, {max-width: 100%}]
+    card_mod:
+      style: |
+        .noc-strip {display:grid;width:100%;min-width:0;max-width:100%;grid-template-columns:160px minmax(0,1fr) repeat(6,minmax(82px,105px));align-items:center;gap:8px;white-space:nowrap}
+        .noc-title {display:flex;flex-direction:column}.noc-title>b{font-size:18px}.noc-title>span{font-size:11px;color:#555}
+        .noc-alerts{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;min-width:0;max-width:100%;padding-left:12px;border-left:1px solid #ddd}.alert-head{min-width:75px;display:flex;flex-direction:column}.alert-head b{font-size:12px;color:#c5221f}
+        .alert-scroll{display:block;min-width:0;max-width:100%;margin-left:10px;overflow-x:auto;overflow-y:hidden;white-space:nowrap;scrollbar-width:thin;-webkit-overflow-scrolling:touch}.alert-track{display:inline-flex;flex-wrap:nowrap;width:max-content;min-width:max-content;gap:8px}.alert-chip{display:flex;gap:5px;flex:0 0 auto;max-width:210px;padding:5px 8px;border-radius:6px;background:rgba(127,127,127,.08);font-size:10px;font-weight:700}.alert-chip span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis}
+        .alert-ok{display:flex;grid-column:1/-1;min-width:0;gap:8px;align-items:center;color:#34a853}.alert-ok>span:last-child{display:flex;flex-direction:column}.alert-ok b{font-size:12px}
+        .noc-stat{display:grid;grid-template-areas:"i l" "i v";grid-template-columns:auto 1fr;gap:0 6px;align-items:center;border-left:1px solid #ddd;padding-left:8px}.noc-stat>span{grid-area:i;font-size:18px}.noc-stat small{grid-area:l}.noc-stat b{grid-area:v;font-size:14px}.noc-stat small,.alert-head small,.alert-ok small{font-size:8px;font-weight:800;color:#555}
+
+  # ============================================================
+  # REUSABLE REPEATER CARD
+  # ============================================================
+  meshcore_repeater:
+    variables:
+      battery_entity: null
+      detail_path: null
+
+    icon: mdi:radio-tower
+
+    show_icon: true
+    show_name: false
+    show_state: false
+    show_label: false
+
+    triggers_update: all
+
+    tap_action:
+      action: navigate
+      navigation_path: |
+        [[[
+          return window.location.pathname.replace(
+            /\/[^/]*$/,
+            "/" + variables.detail_path
+          );
+        ]]]
+
+    hold_action:
+      action: more-info
+
+    custom_fields:
+
+      display_name: |
+        [[[
+          const displayName =
+            this._config.name ||
+            entity?.attributes?.friendly_name ||
+            "Repeater";
+
+          return `
+            <span
+              title="${displayName}"
+              style="
+                display:block;
+                max-width:100%;
+                overflow:hidden;
+                text-overflow:ellipsis;
+                white-space:nowrap;
+              "
+            >
+              ${displayName}
+            </span>
+          `;
+        ]]]
+
+      status: |
+        [[[
+          const voltage = Number(
+            entity
+              ? entity.state
+              : NaN
+          );
+
+          const batteryEntity =
+            states[variables.battery_entity];
+
+          const battery = Number(
+            batteryEntity
+              ? batteryEntity.state
+              : NaN
+          );
+
+          let colour = "#9e9e9e";
+          let title = "Unknown";
+
+          if (
+            entity &&
+            entity.last_updated &&
+            Number.isFinite(voltage) &&
+            Number.isFinite(battery) &&
+            voltage >= 0 &&
+            battery >= 0
+          ) {
+            const ageSeconds = Math.max(
+              0,
+              Math.floor(
+                (
+                  Date.now() -
+                  new Date(
+                    entity.last_updated
+                  ).getTime()
+                ) / 1000
+              )
+            );
+
+            if (ageSeconds > 10800) {
+              colour = "#ea4335";
+              title = "Offline";
+            } else if (ageSeconds > 5400) {
+              colour = "#ff9800";
+              title = "Stale";
+            } else {
+              colour = "#34a853";
+              title = "Online";
+            }
+          }
+
+          return `
+            <span
+              title="${title}"
+              aria-label="${title}"
+              style="
+                display:block;
+                width:10px;
+                height:10px;
+                border-radius:50%;
+                background:${colour};
+                box-shadow:0 0 0 3px ${colour}22;
+              "
+            ></span>
+          `;
+        ]]]
+
+      voltage: |
+        [[[
+          const voltage = Number(
+            entity
+              ? entity.state
+              : NaN
+          );
+
+          if (
+            !Number.isFinite(voltage) ||
+            voltage < 0
+          ) {
+            return "—";
+          }
+
+          return voltage.toFixed(3) + " V";
+        ]]]
+
+      battery: |
+        [[[
+          const voltage = Number(
+            entity
+              ? entity.state
+              : NaN
+          );
+
+          const batteryEntity =
+            states[variables.battery_entity];
+
+          const battery = Number(
+            batteryEntity
+              ? batteryEntity.state
+              : NaN
+          );
+
+          if (
+            !Number.isFinite(voltage) ||
+            !Number.isFinite(battery) ||
+            voltage < 0 ||
+            battery < 0
+          ) {
+            return "—";
+          }
+
+          return Math.round(battery) + "%";
+        ]]]
+
+      battery_bar: |
+        [[[
+          const voltage = Number(
+            entity
+              ? entity.state
+              : NaN
+          );
+
+          const batteryEntity =
+            states[variables.battery_entity];
+
+          let battery = Number(
+            batteryEntity
+              ? batteryEntity.state
+              : NaN
+          );
+
+          const valid =
+            Number.isFinite(voltage) &&
+            Number.isFinite(battery) &&
+            voltage >= 0 &&
+            battery >= 0;
+
+          if (!valid) {
+            battery = 0;
+          }
+
+          battery = Math.max(
+            0,
+            Math.min(100, battery)
+          );
+
+          let colour = "#9e9e9e";
+
+          if (valid) {
+            if (battery >= 80) {
+              colour = "#34a853";
+            } else if (battery >= 60) {
+              colour = "#7cb342";
+            } else if (battery >= 40) {
+              colour = "#fbbc04";
+            } else if (battery >= 20) {
+              colour = "#ff9800";
+            } else {
+              colour = "#ea4335";
+            }
+          }
+
+          return `
+            <div style="
+              width:100%;
+              height:6px;
+              overflow:hidden;
+              border-radius:8px;
+              background:#d5d5d5;
+            ">
+              <div style="
+                width:${battery}%;
+                height:100%;
+                border-radius:8px;
+                background:${colour};
+                transition:width 0.4s ease;
+              "></div>
+            </div>
+          `;
+        ]]]
+
+      last_seen: |
+        [[[
+          if (
+            !entity ||
+            !entity.last_updated
+          ) {
+            return "No telemetry";
+          }
+
+          const voltage = Number(
+            entity.state
+          );
+
+          if (
+            !Number.isFinite(voltage) ||
+            voltage < 0
+          ) {
+            return "No telemetry";
+          }
+
+          let seconds = Math.floor(
+            (
+              Date.now() -
+              new Date(
+                entity.last_updated
+              ).getTime()
+            ) / 1000
+          );
+
+          seconds = Math.max(
+            0,
+            seconds
+          );
+
+          if (seconds < 60) {
+            return "Now";
+          }
+
+          const minutes = Math.floor(
+            seconds / 60
+          );
+
+          if (minutes < 60) {
+            return minutes + "m ago";
+          }
+
+          const hours = Math.floor(
+            minutes / 60
+          );
+
+          if (hours < 24) {
+            return hours + "h ago";
+          }
+
+          return "Yesterday";
+        ]]]
+
+    styles:
+
+      card:
+        - width: 100%
+        - height: 92px
+        - min-height: 92px
+        - max-height: 92px
+        - box-sizing: border-box
+        - border: 1px solid rgba(100,100,100,0.20)
+        - box-shadow: none
+        - border-radius: 12px
+        - padding: 10px 11px
+        - background: rgba(245,245,245,0.86)
+        - overflow: hidden
+        - cursor: pointer
+
+      grid:
+        - width: 100%
+        - height: 100%
+        - grid-template-areas: |
+            "i display_name status"
+            "i voltage battery"
+            "battery_bar battery_bar battery_bar"
+            "last_seen last_seen last_seen"
+        - grid-template-columns: 38px minmax(0,1fr) auto
+        - grid-template-rows: 20px 22px 8px 14px
+        - column-gap: 10px
+        - row-gap: 3px
+
+      img_cell:
+        - width: 34px
+        - height: 34px
+        - align-self: start
+        - justify-self: center
+        - border-radius: 50%
+        - background: rgba(127,127,127,0.10)
+
+      icon:
+        - width: 24px
+        - color: "#5f6368"
+
+      custom_fields:
+
+        display_name:
+          - justify-self: stretch
+          - align-self: center
+          - min-width: 0
+          - max-width: 100%
+          - font-size: 15px
+          - font-weight: 800
+          - line-height: 18px
+          - color: "#000000"
+
+        status:
+          - justify-self: end
+          - align-self: center
+          - padding-right: 5px
+
+        voltage:
+          - justify-self: start
+          - align-self: center
+          - font-size: 16px
+          - font-weight: 800
+          - line-height: 19px
+          - white-space: nowrap
+          - color: |
+              [[[
+                const voltage = Number(
+                  entity
+                    ? entity.state
+                    : NaN
+                );
+
+                if (
+                  !Number.isFinite(voltage) ||
+                  voltage < 0
+                ) {
+                  return "#777777";
+                }
+
+                if (voltage < 3.60) {
+                  return "#ea4335";
+                }
+
+                if (voltage < 3.80) {
+                  return "#ff9800";
+                }
+
+                if (voltage < 3.95) {
+                  return "#fbbc04";
+                }
+
+                if (voltage < 4.10) {
+                  return "#7cb342";
+                }
+
+                return "#34a853";
+              ]]]
+
+        battery:
+          - justify-self: end
+          - align-self: center
+          - font-size: 16px
+          - font-weight: |
+              [[[
+                const batteryEntity =
+                  states[variables.battery_entity];
+
+                const battery = Number(
+                  batteryEntity
+                    ? batteryEntity.state
+                    : NaN
+                );
+
+                return (
+                  Number.isFinite(battery) &&
+                  battery >= 0 &&
+                  battery < 50
+                )
+                  ? 900
+                  : 800;
+              ]]]
+          - line-height: 19px
+          - white-space: nowrap
+          - color: |
+              [[[
+                const batteryEntity =
+                  states[variables.battery_entity];
+
+                const battery = Number(
+                  batteryEntity
+                    ? batteryEntity.state
+                    : NaN
+                );
+
+                if (
+                  !Number.isFinite(battery) ||
+                  battery < 0
+                ) {
+                  return "#777777";
+                }
+
+                if (battery < 20) {
+                  return "#ea4335";
+                }
+
+                if (battery < 40) {
+                  return "#ff9800";
+                }
+
+                if (battery < 60) {
+                  return "#fbbc04";
+                }
+
+                if (battery < 80) {
+                  return "#7cb342";
+                }
+
+                return "#34a853";
+              ]]]
+
+        battery_bar:
+          - align-self: center
+          - width: 100%
+
+        last_seen:
+          - justify-self: start
+          - align-self: end
+          - font-size: 10px
+          - font-weight: 600
+          - line-height: 12px
+          - color: |
+              [[[
+                if (
+                  !entity ||
+                  !entity.last_updated
+                ) {
+                  return "#777777";
+                }
+
+                const voltage = Number(
+                  entity.state
+                );
+
+                if (
+                  !Number.isFinite(voltage) ||
+                  voltage < 0
+                ) {
+                  return "#777777";
+                }
+
+                const ageSeconds = Math.floor(
+                  (
+                    Date.now() -
+                    new Date(
+                      entity.last_updated
+                    ).getTime()
+                  ) / 1000
+                );
+
+                if (ageSeconds < 1800) {
+                  return "#34a853";
+                }
+
+                if (ageSeconds < 5400) {
+                  return "#fbbc04";
+                }
+
+                if (ageSeconds < 10800) {
+                  return "#ff9800";
+                }
+
+                return "#ea4335";
+              ]]]
+
+  # ============================================================
+  # REPEATER DETAIL HEADER
+  # ============================================================
+  meshcore_detail_header:
+    variables:
+      repeater_name: Repeater
+      battery_entity: null
+
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: false
+    triggers_update: all
+
+    tap_action:
+      action: none
+
+    custom_fields:
+      content: |
+        [[[
+          const voltage = Number(
+            entity
+              ? entity.state
+              : NaN
+          );
+
+          const batteryEntity =
+            states[variables.battery_entity];
+
+          const battery = Number(
+            batteryEntity
+              ? batteryEntity.state
+              : NaN
+          );
+
+          const valid =
+            entity &&
+            entity.last_updated &&
+            Number.isFinite(voltage) &&
+            Number.isFinite(battery) &&
+            voltage >= 0 &&
+            battery >= 0;
+
+          const ageSeconds = valid
+            ? Math.max(
+                0,
+                Math.floor(
+                  (
+                    Date.now() -
+                    new Date(
+                      entity.last_updated
+                    ).getTime()
+                  ) / 1000
+                )
+              )
+            : Infinity;
+
+          let status = "Unknown";
+          let statusColour = "#9e9e9e";
+
+          if (valid) {
+            if (ageSeconds >= 10800) {
+              status = "Offline";
+              statusColour = "#ea4335";
+            } else if (ageSeconds >= 7200) {
+              status = "Stale";
+              statusColour = "#ff9800";
+            } else if (ageSeconds >= 4500) {
+              status = "Aging";
+              statusColour = "#fbbc04";
+            } else {
+              status = "Online";
+              statusColour = "#34a853";
+            }
+          }
+
+          let updated = "Unknown";
+
+          if (valid) {
+            if (ageSeconds < 60) {
+              updated = "Now";
+            } else if (ageSeconds < 3600) {
+              updated =
+                Math.floor(ageSeconds / 60) +
+                "m ago";
+            } else if (ageSeconds < 86400) {
+              updated =
+                Math.floor(ageSeconds / 3600) +
+                "h ago";
+            } else {
+              updated = "Yesterday";
+            }
+          }
+
+          return `
+            <div class="detail-header">
+              <div class="detail-heading">
+                <span>REPEATER DETAILS</span>
+                <strong>${variables.repeater_name}</strong>
+              </div>
+
+              <div
+                class="detail-status"
+                style="color:${statusColour};"
+              >
+                <i style="background:${statusColour};"></i>
+                ${status}
+              </div>
+
+              <div class="detail-metric">
+                <span>BATTERY</span>
+                <strong>
+                  ${valid
+                    ? Math.round(battery) + "%"
+                    : "&mdash;"}
+                </strong>
+              </div>
+
+              <div class="detail-metric">
+                <span>VOLTAGE</span>
+                <strong>
+                  ${valid
+                    ? voltage.toFixed(3) + " V"
+                    : "&mdash;"}
+                </strong>
+              </div>
+
+              <div class="detail-metric">
+                <span>LAST UPDATED</span>
+                <strong>${updated}</strong>
+              </div>
+            </div>
+          `;
+        ]]]
+
+    styles:
+      card:
+        - width: 100%
+        - box-sizing: border-box
+        - border: 1px solid rgba(100,100,100,0.18)
+        - border-radius: 14px
+        - box-shadow: none
+        - padding: 18px 22px
+        - background: rgba(245,245,245,0.92)
+      grid:
+        - width: 100%
+        - grid-template-areas: '"content"'
+        - grid-template-columns: minmax(0,1fr)
+      custom_fields:
+        content:
+          - width: 100%
+          - min-width: 0
+
+    card_mod:
+      style: |
+        .detail-header {
+          display: grid;
+          grid-template-columns: minmax(260px,1fr) repeat(4,minmax(130px,auto));
+          align-items: center;
+          gap: 22px;
+          color: #000000;
+        }
+
+        .detail-heading,
+        .detail-metric {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .detail-heading span,
+        .detail-metric span {
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: 0.8px;
+          color: #666666;
+        }
+
+        .detail-heading strong {
+          margin-top: 3px;
+          font-size: 25px;
+          line-height: 29px;
+        }
+
+        .detail-status {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 22px;
+          font-weight: 800;
+        }
+
+        .detail-status i {
+          display: block;
+          width: 13px;
+          height: 13px;
+          border-radius: 50%;
+          box-shadow: 0 0 0 4px currentColor;
+        }
+
+        .detail-metric {
+          padding-left: 18px;
+          border-left: 1px solid #dddddd;
+        }
+
+        .detail-metric strong {
+          margin-top: 3px;
+          font-size: 19px;
+          line-height: 23px;
+        }
+
+  # ============================================================
+  # REPEATER DETAIL HEALTH
+  # ============================================================
+  meshcore_detail_health:
+    variables:
+      battery_entity: null
+
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: false
+    triggers_update: all
+
+    tap_action:
+      action: none
+
+    custom_fields:
+      content: |
+        [[[
+          const voltage = Number(
+            entity
+              ? entity.state
+              : NaN
+          );
+
+          const batteryEntity =
+            states[variables.battery_entity];
+
+          const battery = Number(
+            batteryEntity
+              ? batteryEntity.state
+              : NaN
+          );
+
+          const valid =
+            entity &&
+            entity.last_updated &&
+            Number.isFinite(voltage) &&
+            Number.isFinite(battery) &&
+            voltage >= 0 &&
+            battery >= 0;
+
+          const ageSeconds = valid
+            ? Math.max(
+                0,
+                Math.floor(
+                  (
+                    Date.now() -
+                    new Date(
+                      entity.last_updated
+                    ).getTime()
+                  ) / 1000
+                )
+              )
+            : Infinity;
+
+          let batteryStatus = "Unknown";
+          let batteryColour = "#9e9e9e";
+
+          if (valid) {
+            if (battery < 20) {
+              batteryStatus = "Critical";
+              batteryColour = "#ea4335";
+            } else if (battery < 40) {
+              batteryStatus = "Low";
+              batteryColour = "#ff9800";
+            } else if (battery < 80) {
+              batteryStatus = "Good";
+              batteryColour = "#fbbc04";
+            } else {
+              batteryStatus = "Excellent";
+              batteryColour = "#34a853";
+            }
+          }
+
+          let freshness = "Unknown";
+          let freshnessColour = "#9e9e9e";
+
+          if (valid) {
+            if (ageSeconds >= 10800) {
+              freshness = "Offline";
+              freshnessColour = "#ea4335";
+            } else if (ageSeconds >= 7200) {
+              freshness = "Stale";
+              freshnessColour = "#ff9800";
+            } else if (ageSeconds >= 4500) {
+              freshness = "Aging";
+              freshnessColour = "#fbbc04";
+            } else {
+              freshness = "Fresh";
+              freshnessColour = "#34a853";
+            }
+          }
+
+          let alertLevel = "Unknown";
+          let alertColour = "#9e9e9e";
+
+          if (valid) {
+            if (
+              ageSeconds >= 10800 ||
+              battery < 20 ||
+              voltage < 3.30
+            ) {
+              alertLevel = "Critical";
+              alertColour = "#ea4335";
+            } else if (
+              ageSeconds >= 7200 ||
+              battery < 40 ||
+              voltage < 3.60
+            ) {
+              alertLevel = "Warning";
+              alertColour = "#ff9800";
+            } else {
+              alertLevel = "Normal";
+              alertColour = "#34a853";
+            }
+          }
+
+          const item = (
+            label,
+            value,
+            colour
+          ) => `
+            <div class="health-item">
+              <span>${label}</span>
+              <strong style="color:${colour};">
+                <i style="background:${colour};"></i>
+                ${value}
+              </strong>
+            </div>
+          `;
+
+          return `
+            <div class="health-grid">
+              ${item(
+                "BATTERY STATUS",
+                batteryStatus,
+                batteryColour
+              )}
+              ${item(
+                "FRESHNESS",
+                freshness,
+                freshnessColour
+              )}
+              ${item(
+                "ALERT LEVEL",
+                alertLevel,
+                alertColour
+              )}
+            </div>
+          `;
+        ]]]
+
+    styles:
+      card:
+        - width: 100%
+        - box-sizing: border-box
+        - border: 1px solid rgba(100,100,100,0.18)
+        - border-radius: 12px
+        - box-shadow: none
+        - padding: 16px
+        - background: rgba(245,245,245,0.86)
+      grid:
+        - width: 100%
+        - grid-template-areas: '"content"'
+        - grid-template-columns: minmax(0,1fr)
+      custom_fields:
+        content:
+          - width: 100%
+
+    card_mod:
+      style: |
+        .health-grid {
+          display: grid;
+          grid-template-columns: repeat(3,minmax(0,1fr));
+          gap: 16px;
+        }
+
+        .health-item {
+          display: flex;
+          flex-direction: column;
+          padding: 4px 14px;
+          border-left: 3px solid #dddddd;
+        }
+
+        .health-item span {
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: 0.8px;
+          color: #666666;
+        }
+
+        .health-item strong {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 5px;
+          font-size: 18px;
+        }
+
+        .health-item i {
+          display: block;
+          width: 9px;
+          height: 9px;
+          border-radius: 50%;
+        }
+
+  # ============================================================
+  # BATTERY INTELLIGENCE DETAIL PANEL
+  # ============================================================
+  meshcore_battery_intelligence_readings:
+    variables:
+      calibrated_voltage_entity: null
+      battery_entity: null
+      voltage_offset_entity: null
+      empty_voltage_entity: null
+      full_voltage_entity: null
+
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: false
+    triggers_update: all
+
+    tap_action:
+      action: none
+
+    custom_fields:
+      content: |
+        [[[
+          const numericState = (entityId) => {
+            const item = states[entityId];
+            const value = Number(item ? item.state : NaN);
+            return Number.isFinite(value) ? value : null;
+          };
+
+          const raw = entity
+            ? numericState(entity.entity_id)
+            : null;
+          const calibrated = numericState(
+            variables.calibrated_voltage_entity
+          );
+          const battery = numericState(
+            variables.battery_entity
+          );
+          const offset = numericState(
+            variables.voltage_offset_entity
+          );
+          const empty = numericState(
+            variables.empty_voltage_entity
+          );
+          const full = numericState(
+            variables.full_voltage_entity
+          );
+          const tolerance = 0.0006;
+          const isDefault =
+            offset !== null &&
+            empty !== null &&
+            full !== null &&
+            Math.abs(offset - (-0.816)) <= tolerance &&
+            Math.abs(empty - 3.000) <= tolerance &&
+            Math.abs(full - 4.200) <= tolerance;
+          const status = isDefault
+            ? "Default"
+            : "Custom";
+          const colour = isDefault
+            ? "#34a853"
+            : "#f9ab00";
+          const voltageText = (value) =>
+            value === null
+              ? "&mdash;"
+              : value.toFixed(3) + " V";
+          const batteryText =
+            battery === null
+              ? "&mdash;"
+              : Math.round(battery) + "%";
+
+          return `
+            <div class="bi-readings">
+              <div>
+                <span>RAW VOLTAGE</span>
+                <strong>${voltageText(raw)}</strong>
+              </div>
+              <div>
+                <span>CALIBRATED VOLTAGE</span>
+                <strong>${voltageText(calibrated)}</strong>
+              </div>
+              <div>
+                <span>CALCULATED BATTERY</span>
+                <strong>${batteryText}</strong>
+              </div>
+              <div class="bi-status">
+                <span>CALIBRATION STATUS</span>
+                <strong style="color:${colour};">
+                  <i style="background:${colour};"></i>
+                  ${status}
+                </strong>
+              </div>
+            </div>
+          `;
+        ]]]
+
+    styles:
+      card:
+        - width: 100%
+        - height: 100%
+        - box-sizing: border-box
+        - border: 1px solid rgba(100,100,100,0.18)
+        - border-radius: 12px
+        - box-shadow: none
+        - padding: 13px 16px
+        - background: rgba(245,245,245,0.86)
+      grid:
+        - width: 100%
+        - grid-template-areas: '"content"'
+        - grid-template-columns: minmax(0,1fr)
+      custom_fields:
+        content:
+          - width: 100%
+          - min-width: 0
+
+    card_mod:
+      style: |
+        .bi-readings {
+          display: grid;
+          grid-template-columns: repeat(4,minmax(0,1fr));
+          gap: 12px;
+          color: #000000;
+        }
+
+        .bi-readings > div {
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+          padding-left: 12px;
+          border-left: 3px solid #dddddd;
+        }
+
+        .bi-readings span {
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: 0.7px;
+          color: #666666;
+        }
+
+        .bi-readings strong {
+          margin-top: 4px;
+          font-size: 17px;
+          line-height: 21px;
+        }
+
+        .bi-status strong {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .bi-status i {
+          display: block;
+          width: 9px;
+          height: 9px;
+          flex: 0 0 auto;
+          border-radius: 50%;
+        }
+
+  meshcore_battery_intelligence_reset:
+    variables:
+      voltage_offset_entity: null
+      empty_voltage_entity: null
+      full_voltage_entity: null
+
+    icon: mdi:restore
+    name: Reset This Repeater
+    show_state: false
+
+    tap_action:
+      action: call-service
+      service: script.meshcore_battery_intelligence_reset_repeater_calibration
+      service_data:
+        voltage_offset_entity: |
+          [[[ return variables.voltage_offset_entity; ]]]
+        empty_voltage_entity: |
+          [[[ return variables.empty_voltage_entity; ]]]
+        full_voltage_entity: |
+          [[[ return variables.full_voltage_entity; ]]]
+      confirmation:
+        text: Reset this repeater's calibration values to the approved defaults?
+
+    styles:
+      card:
+        - width: 100%
+        - height: 100%
+        - box-sizing: border-box
+        - border: 1px solid rgba(100,100,100,0.18)
+        - border-radius: 12px
+        - box-shadow: none
+        - padding: 12px
+        - background: rgba(245,245,245,0.86)
+      icon:
+        - color: "#ea4335"
+        - width: 24px
+      name:
+        - color: "#c5221f"
+        - font-size: 12px
+        - font-weight: 800
+
+  # ============================================================
+  # NETWORK SUMMARY
+  # ============================================================
+  meshcore_summary:
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: false
+    triggers_update: all
+    tap_action: {action: none}
+    hold_action: {action: none}
+    custom_fields:
+      content: |
+        [[[
+          const nodes = [
+            ["ProMicro","sensor.promicro_repeater_bi_calibrated_voltage","sensor.promicro_repeater_bi_battery_percentage"],
+            ["Myburgh Park","sensor.myburgh_park_bi_calibrated_voltage","sensor.myburgh_park_bi_battery_percentage"],
+            ["Saldanha","sensor.saldanha_repeater_bi_calibrated_voltage","sensor.saldanha_repeater_bi_battery_percentage"],
+            ["Vredenburg","sensor.vredenburg_bi_calibrated_voltage","sensor.vredenburg_bi_battery_percentage"],
+            ["Vredenburg NE","sensor.vredenburg_ne_bi_calibrated_voltage","sensor.vredenburg_ne_bi_battery_percentage"],
+            ["Laguna 2","sensor.laguna2_repeater_bi_calibrated_voltage","sensor.laguna2_bi_battery_percentage"],
+            ["ProMicro Test","sensor.promicro_test_repeater_bi_calibrated_voltage","sensor.promicro_test_repeater_bi_battery_percentage"],
+            ["Test Solar","sensor.test_solar_repeater_bi_calibrated_voltage","sensor.test_solar_bi_battery_percentage"]];
+          const model=nodes.map(([name,vId,bId])=>{const ve=states[vId],be=states[bId],v=Number(ve?ve.state:NaN),b=Number(be?be.state:NaN),vv=!!(ve&&Number.isFinite(v)&&v>=0),valid=!!(vv&&be&&Number.isFinite(b)&&b>=0),age=vv&&ve.last_updated?Math.max(0,Math.floor((Date.now()-new Date(ve.last_updated).getTime())/1000)):Infinity;return{name,v,b,vv,valid,age};});
+          let total=0;model.forEach(n=>{if(!n.valid)return;if(n.age>10800)total+=0;else if(n.age>5400)total+=40;else if(n.b<20||n.v<3.30)total+=30;else if(n.b<40||n.v<3.60)total+=55;else if(n.b<70||n.v<3.85)total+=75;else total+=100;});
+          const score=Math.round(total/nodes.length),valid=model.filter(n=>n.valid),volts=model.filter(n=>n.vv),online=model.filter(n=>n.vv&&n.age<=10800).length,warnings=valid.filter(n=>n.v<3.60||n.b<40).length;let label="Critical",hc="#c5221f",bc="#ea4335";if(score>=85){label="Excellent";hc="#188038";bc="#34a853"}else if(score>=70){label="Good";hc="#b06000";bc="#fbbc04"}else if(score>=50){label="Warning";hc="#e37400";bc="#ff9800"}const lowB=valid.reduce((a,n)=>!a||n.b<a.b?n:a,null),lowV=volts.reduce((a,n)=>!a||n.v<a.v?n:a,null),avg=(xs,k,d,s)=>xs.length?(xs.reduce((a,n)=>a+n[k],0)/xs.length).toFixed(d)+s:"&mdash;";
+          return `<div class="summary"><small>NETWORK HEALTH</small><strong style="color:${hc}">${label}</strong><em>${score}%</em><div class="bar"><i style="width:${score}%;background:${bc}"></i></div><b>&#128994; Online&nbsp;&nbsp;${online}</b><b>&#128308; Offline&nbsp;&nbsp;${nodes.length-online}</b><b>&#128992; Warnings&nbsp;&nbsp;${warnings}</b><span class="divider">Average battery<br><b>${valid.length?Math.round(valid.reduce((a,n)=>a+n.b,0)/valid.length)+"%":"&mdash;"}</b></span><span>Average voltage<br><b>${avg(volts,"v",3," V")}</b></span><span class="divider">Lowest battery<br><b>${lowB?lowB.name+" &middot; "+Math.round(lowB.b)+"%":"&mdash;"}</b></span><span>Lowest voltage<br><b>${lowV?lowV.name+" &middot; "+lowV.v.toFixed(3)+" V":"&mdash;"}</b></span></div>`;
+        ]]]
+    styles:
+      card:
+        - width: 100%
+        - box-sizing: border-box
+        - border: 1px solid rgba(100,100,100,0.20)
+        - box-shadow: none
+        - border-radius: 12px
+        - padding: 15px
+        - background: rgba(245,245,245,0.86)
+      grid:
+        - width: 100%
+        - grid-template-areas: '"content"'
+        - grid-template-columns: minmax(0,1fr)
+      custom_fields:
+        content:
+          - width: 100%
+          - min-width: 0
+    card_mod:
+      style: |
+        .summary{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:repeat(11,min-content);gap:9px;color:#000}.summary>small{font-size:10px;font-weight:800;letter-spacing:1px}.summary>strong{font-size:17px}.summary>em{font-size:34px;font-style:normal;font-weight:800;line-height:36px}.bar{height:9px;margin-bottom:6px;overflow:hidden;border-radius:10px;background:#d5d5d5}.bar i{display:block;height:100%;border-radius:10px}.summary>b{font-size:13px}.summary>span{font-size:11px;line-height:18px}.summary .divider{padding-top:8px;border-top:1px solid #ddd}
+
+apexcharts_card_templates:
+
+  meshcore_detail_voltage_chart:
+    graph_span: 24h
+    update_interval: 5min
+    header:
+      show: true
+      title: 24-hour Voltage History
+      show_states: true
+      colorize_states: true
+    all_series_config:
+      type: area
+      stroke_width: 3
+      opacity: 0.20
+      extend_to: false
+      float_precision: 3
+      transform: |
+        return x >= 0 ? x : null;
+      show:
+        legend_value: false
+    yaxis:
+      - min: 3
+        max: 4.3
+        decimals: 2
+        apex_config:
+          tickAmount: 5
+          title:
+            text: Voltage
+    apex_config:
+      chart:
+        height: 290px
+        toolbar:
+          show: true
+      stroke:
+        curve: smooth
+      grid:
+        borderColor: rgba(120,120,120,0.20)
+
+  meshcore_detail_battery_chart:
+    graph_span: 24h
+    update_interval: 5min
+    header:
+      show: true
+      title: 24-hour Battery History
+      show_states: true
+      colorize_states: true
+    all_series_config:
+      type: area
+      stroke_width: 3
+      opacity: 0.20
+      extend_to: false
+      float_precision: 0
+      transform: |
+        return x >= 0 ? x : null;
+      show:
+        legend_value: false
+    yaxis:
+      - min: 0
+        max: 100
+        decimals: 0
+        apex_config:
+          tickAmount: 5
+          title:
+            text: Battery
+    apex_config:
+      chart:
+        height: 290px
+        toolbar:
+          show: true
+      stroke:
+        curve: smooth
+      grid:
+        borderColor: rgba(120,120,120,0.20)
+
+  meshcore_detail_voltage_statistic:
+    graph_span: 24h
+    span:
+      start: day
+    update_interval: 5min
+    header:
+      show: true
+      show_states: true
+      colorize_states: true
+      standard_format: true
+    yaxis:
+      - show: false
+    apex_config:
+      chart:
+        height: 1px
+        toolbar:
+          show: false
+      grid:
+        show: false
+        padding:
+          top: -20
+          bottom: -20
+      xaxis:
+        labels:
+          show: false
+        axisBorder:
+          show: false
+        axisTicks:
+          show: false
+      tooltip:
+        enabled: false
+
+views:
+
+  - title: Network Monitor
+    path: "0"
+    icon: mdi:access-point-network
+    panel: true
+
+    cards:
+
+      - type: custom:layout-card
+        layout_type: custom:grid-layout
+
+        layout:
+          width: 100%
+          max_cols: 3
+
+          grid-template-columns: minmax(420px,26%) minmax(0,1fr) minmax(285px,18%)
+
+          grid-template-rows: auto auto
+
+          grid-template-areas: |
+            "status status status"
+            "repeaters graph summary"
+
+          justify-items: stretch
+          align-items: start
+
+          column-gap: 20px
+          row-gap: 12px
+          margin: 14px
+
+        cards:
+
+          # ====================================================
+          # TOP — STATUS AND ACTIVE ALERTS
+          # ====================================================
+          - type: custom:button-card
+            template: meshcore_status_strip
+
+            view_layout:
+              grid-area: status
+              grid-column: 1 / -1
+              width: 100%
+
+          # ====================================================
+          # LEFT — REPEATERS
+          # ====================================================
+          - type: vertical-stack
+            view_layout:
+              grid-area: repeaters
+
+            cards:
+
+              - type: markdown
+                content: |
+                  ## 📡 Repeaters
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      width: 100%;
+                      box-sizing: border-box;
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                      color: #000000;
+                    }
+
+              - type: grid
+                columns: 2
+                square: false
+
+                card_mod:
+                  style: |
+                    #root {
+                      align-items: stretch;
+                    }
+
+                cards:
+
+                  - type: custom:button-card
+                    template: meshcore_repeater
+                    entity: sensor.promicro_repeater_bi_calibrated_voltage
+                    name: ProMicro
+
+                    variables:
+                      battery_entity: sensor.promicro_repeater_bi_battery_percentage
+                      detail_path: repeater-promicro
+
+                  - type: custom:button-card
+                    template: meshcore_repeater
+                    entity: sensor.myburgh_park_bi_calibrated_voltage
+                    name: Myburgh Park
+
+                    variables:
+                      battery_entity: sensor.myburgh_park_bi_battery_percentage
+                      detail_path: repeater-myburgh-park
+
+                  - type: custom:button-card
+                    template: meshcore_repeater
+                    entity: sensor.saldanha_repeater_bi_calibrated_voltage
+                    name: Saldanha
+
+                    variables:
+                      battery_entity: sensor.saldanha_repeater_bi_battery_percentage
+                      detail_path: repeater-saldanha
+
+                  - type: custom:button-card
+                    template: meshcore_repeater
+                    entity: sensor.vredenburg_bi_calibrated_voltage
+                    name: Vredenburg
+
+                    variables:
+                      battery_entity: sensor.vredenburg_bi_battery_percentage
+                      detail_path: repeater-vredenburg
+
+                  - type: custom:button-card
+                    template: meshcore_repeater
+                    entity: sensor.vredenburg_ne_bi_calibrated_voltage
+                    name: Vredenburg NE
+
+                    variables:
+                      battery_entity: sensor.vredenburg_ne_bi_battery_percentage
+                      detail_path: repeater-vredenburg-ne
+
+                  - type: custom:button-card
+                    template: meshcore_repeater
+                    entity: sensor.laguna2_repeater_bi_calibrated_voltage
+                    name: Laguna 2
+
+                    variables:
+                      battery_entity: sensor.laguna2_bi_battery_percentage
+                      detail_path: repeater-laguna-2
+
+                  - type: custom:button-card
+                    template: meshcore_repeater
+                    entity: sensor.promicro_test_repeater_bi_calibrated_voltage
+                    name: ProMicro Test
+
+                    variables:
+                      battery_entity: sensor.promicro_test_repeater_bi_battery_percentage
+                      detail_path: repeater-promicro-test
+
+                  - type: custom:button-card
+                    template: meshcore_repeater
+                    entity: sensor.test_solar_repeater_bi_calibrated_voltage
+                    name: Test Solar
+
+                    variables:
+                      battery_entity: sensor.test_solar_bi_battery_percentage
+                      detail_path: repeater-test-solar
+
+          # ====================================================
+          # CENTRE — VOLTAGE HISTORY
+          # ====================================================
+          - type: custom:apexcharts-card
+
+            view_layout:
+              grid-area: graph
+
+            header:
+              show: true
+              title: Voltage History
+              show_states: false
+
+            graph_span: 24h
+            update_interval: 5min
+
+            yaxis:
+
+              - min: 3
+                max: 4.3
+                decimals: 2
+
+                apex_config:
+                  tickAmount: 5
+
+                  title:
+                    text: Voltage
+
+            apex_config:
+
+              chart:
+                height: 535px
+
+                toolbar:
+                  show: true
+
+                zoom:
+                  enabled: true
+
+              stroke:
+                width: 3
+                curve: smooth
+
+              legend:
+                show: true
+                position: bottom
+                fontSize: 11px
+
+                itemMargin:
+                  horizontal: 8
+                  vertical: 4
+
+              tooltip:
+                shared: true
+                intersect: false
+
+              grid:
+                borderColor: rgba(120,120,120,0.20)
+
+            series:
+
+              - entity: sensor.meshcore_034bdb9383_bat_promicro_repeater
+                name: ProMicro
+                type: line
+                extend_to: false
+                float_precision: 3
+
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_promicro_repeater_voltage_offset"]?.state);
+                  if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                  const calibrated = raw + offset;
+                  return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+
+                show:
+                  legend_value: false
+
+              - entity: sensor.meshcore_02951be5e5_bat_myburgh_park
+                name: Myburgh Park
+                type: line
+                extend_to: false
+                float_precision: 3
+
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_myburgh_park_voltage_offset"]?.state);
+                  if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                  const calibrated = raw + offset;
+                  return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+
+                show:
+                  legend_value: false
+
+              - entity: sensor.meshcore_f9caec4ded_bat_saldanha
+                name: Saldanha
+                type: line
+                extend_to: false
+                float_precision: 3
+
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_saldanha_voltage_offset"]?.state);
+                  if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                  const calibrated = raw + offset;
+                  return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+
+                show:
+                  legend_value: false
+
+              - entity: sensor.meshcore_65297b53fa_bat_vredenburg
+                name: Vredenburg
+                type: line
+                extend_to: false
+                float_precision: 3
+
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_vredenburg_voltage_offset"]?.state);
+                  if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                  const calibrated = raw + offset;
+                  return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+
+                show:
+                  legend_value: false
+
+              - entity: sensor.meshcore_2d1ada344b_bat_vredenburg_ne
+                name: Vredenburg NE
+                type: line
+                extend_to: false
+                float_precision: 3
+
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_vredenburg_ne_voltage_offset"]?.state);
+                  if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                  const calibrated = raw + offset;
+                  return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+
+                show:
+                  legend_value: false
+
+              - entity: sensor.meshcore_01c1a4fa32_bat_laguna2
+                name: Laguna 2
+                type: line
+                extend_to: false
+                float_precision: 3
+
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_laguna2_voltage_offset"]?.state);
+                  if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                  const calibrated = raw + offset;
+                  return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+
+                show:
+                  legend_value: false
+
+              - entity: sensor.meshcore_04560eba43_bat_promicro_test_repeater
+                name: ProMicro Test
+                type: line
+                extend_to: false
+                float_precision: 3
+
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_promicro_test_repeater_voltage_offset"]?.state);
+                  if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                  const calibrated = raw + offset;
+                  return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+
+                show:
+                  legend_value: false
+
+              - entity: sensor.meshcore_23b033ff3a_bat_test_solar
+                name: Test Solar
+                type: line
+                extend_to: false
+                float_precision: 3
+
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_test_solar_voltage_offset"]?.state);
+                  if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                  const calibrated = raw + offset;
+                  return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+
+                show:
+                  legend_value: false
+
+            card_mod:
+              style: |
+                ha-card {
+                  width: 100%;
+                  box-sizing: border-box;
+                  box-shadow: none;
+                }
+
+                .apexcharts-legend {
+                  display: flex !important;
+                  flex-wrap: wrap !important;
+                  justify-content: center !important;
+                }
+
+          # ====================================================
+          # RIGHT — NETWORK SUMMARY
+          # ====================================================
+          - type: vertical-stack
+
+            view_layout:
+              grid-area: summary
+
+            cards:
+
+              - type: markdown
+                content: |
+                  ## Network Summary
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      width: 100%;
+                      box-sizing: border-box;
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                      color: #000000;
+                    }
+
+              - type: custom:button-card
+                template: meshcore_summary
+
+  - title: Repeater Details
+    path: repeater-promicro
+    subview: true
+    panel: true
+
+    cards:
+      - type: custom:layout-card
+        layout_type: custom:grid-layout
+
+        layout:
+          width: 100%
+          grid-template-columns: repeat(2,minmax(0,1fr))
+          grid-template-areas: |
+            "header header"
+            "voltage battery"
+            "statistics statistics"
+            "health health"
+            "intelligence intelligence"
+          column-gap: 16px
+          row-gap: 16px
+          margin: 16px
+
+        cards:
+          - type: custom:button-card
+            template: meshcore_detail_header
+            entity: sensor.promicro_repeater_bi_calibrated_voltage
+            variables:
+              repeater_name: ProMicro
+              battery_entity: sensor.promicro_repeater_bi_battery_percentage
+            view_layout:
+              grid-area: header
+
+          - type: custom:apexcharts-card
+            config_templates: meshcore_detail_voltage_chart
+            series:
+              - entity: sensor.meshcore_034bdb9383_bat_promicro_repeater
+                name: ProMicro Voltage
+                color: "#1a73e8"
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_promicro_repeater_voltage_offset"]?.state);
+                  if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                  const calibrated = raw + offset;
+                  return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+            view_layout:
+              grid-area: voltage
+
+          - type: custom:apexcharts-card
+            config_templates: meshcore_detail_battery_chart
+            series:
+              - entity: sensor.meshcore_034bdb9383_bat_promicro_repeater
+                name: ProMicro Battery
+                color: "#34a853"
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_promicro_repeater_voltage_offset"]?.state);
+                  const empty = Number(hass.states["input_number.meshcore_promicro_repeater_empty_voltage"]?.state);
+                  const full = Number(hass.states["input_number.meshcore_promicro_repeater_full_voltage"]?.state);
+                  if (![raw, offset, empty, full].every(Number.isFinite) || full <= empty) return null;
+                  const calibrated = raw + offset;
+                  if (calibrated < 2.5 || calibrated > 5.0) return null;
+                  return Math.min(100, Math.max(0, ((calibrated - empty) / (full - empty)) * 100));
+            view_layout:
+              grid-area: battery
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: statistics
+            cards:
+              - type: markdown
+                content: |
+                  ## Statistics
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                    }
+
+              - type: grid
+                columns: 5
+                square: false
+                cards:
+                  - type: tile
+                    entity: sensor.promicro_repeater_bi_calibrated_voltage
+                    name: Current voltage
+                    icon: mdi:lightning-bolt
+
+                  - type: tile
+                    entity: sensor.promicro_repeater_bi_battery_percentage
+                    name: Current battery
+                    icon: mdi:battery
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Lowest voltage today
+                    series:
+                      - entity: sensor.meshcore_034bdb9383_bat_promicro_repeater
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_promicro_repeater_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: min
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Highest voltage today
+                    series:
+                      - entity: sensor.meshcore_034bdb9383_bat_promicro_repeater
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_promicro_repeater_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: max
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Average voltage today
+                    series:
+                      - entity: sensor.meshcore_034bdb9383_bat_promicro_repeater
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_promicro_repeater_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: avg
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: health
+            cards:
+              - type: markdown
+                content: |
+                  ## Health
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                    }
+
+              - type: custom:button-card
+                template: meshcore_detail_health
+                entity: sensor.promicro_repeater_bi_calibrated_voltage
+                variables:
+                  battery_entity: sensor.promicro_repeater_bi_battery_percentage
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: intelligence
+            cards:
+              - type: markdown
+                content: |
+                  ## Battery Intelligence
+                card_mod:
+                  style: |
+                    ha-card {border:none;box-shadow:none;background:transparent;padding:0 5px;}
+              - type: grid
+                columns: 3
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: meshcore_battery_intelligence_readings
+                    entity: sensor.meshcore_034bdb9383_bat_promicro_repeater
+                    variables:
+                      calibrated_voltage_entity: sensor.promicro_repeater_bi_calibrated_voltage
+                      battery_entity: sensor.promicro_repeater_bi_battery_percentage
+                      voltage_offset_entity: input_number.meshcore_promicro_repeater_voltage_offset
+                      empty_voltage_entity: input_number.meshcore_promicro_repeater_empty_voltage
+                      full_voltage_entity: input_number.meshcore_promicro_repeater_full_voltage
+                  - type: entities
+                    show_header_toggle: false
+                    entities:
+                      - entity: input_number.meshcore_promicro_repeater_voltage_offset
+                        name: Voltage Offset
+                      - entity: input_number.meshcore_promicro_repeater_empty_voltage
+                        name: Empty Voltage
+                      - entity: input_number.meshcore_promicro_repeater_full_voltage
+                        name: Full Voltage
+                  - type: custom:button-card
+                    template: meshcore_battery_intelligence_reset
+                    variables:
+                      voltage_offset_entity: input_number.meshcore_promicro_repeater_voltage_offset
+                      empty_voltage_entity: input_number.meshcore_promicro_repeater_empty_voltage
+                      full_voltage_entity: input_number.meshcore_promicro_repeater_full_voltage
+
+  - title: Repeater Details
+    path: repeater-myburgh-park
+    subview: true
+    panel: true
+
+    cards:
+      - type: custom:layout-card
+        layout_type: custom:grid-layout
+
+        layout:
+          width: 100%
+          grid-template-columns: repeat(2,minmax(0,1fr))
+          grid-template-areas: |
+            "header header"
+            "voltage battery"
+            "statistics statistics"
+            "health health"
+            "intelligence intelligence"
+          column-gap: 16px
+          row-gap: 16px
+          margin: 16px
+
+        cards:
+          - type: custom:button-card
+            template: meshcore_detail_header
+            entity: sensor.myburgh_park_bi_calibrated_voltage
+            variables:
+              repeater_name: Myburgh Park
+              battery_entity: sensor.myburgh_park_bi_battery_percentage
+            view_layout:
+              grid-area: header
+
+          - type: custom:apexcharts-card
+            config_templates: meshcore_detail_voltage_chart
+            series:
+              - entity: sensor.meshcore_02951be5e5_bat_myburgh_park
+                name: Myburgh Park Voltage
+                color: "#1a73e8"
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_myburgh_park_voltage_offset"]?.state);
+                  if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                  const calibrated = raw + offset;
+                  return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+            view_layout:
+              grid-area: voltage
+
+          - type: custom:apexcharts-card
+            config_templates: meshcore_detail_battery_chart
+            series:
+              - entity: sensor.meshcore_02951be5e5_bat_myburgh_park
+                name: Myburgh Park Battery
+                color: "#34a853"
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_myburgh_park_voltage_offset"]?.state);
+                  const empty = Number(hass.states["input_number.meshcore_myburgh_park_empty_voltage"]?.state);
+                  const full = Number(hass.states["input_number.meshcore_myburgh_park_full_voltage"]?.state);
+                  if (![raw, offset, empty, full].every(Number.isFinite) || full <= empty) return null;
+                  const calibrated = raw + offset;
+                  if (calibrated < 2.5 || calibrated > 5.0) return null;
+                  return Math.min(100, Math.max(0, ((calibrated - empty) / (full - empty)) * 100));
+            view_layout:
+              grid-area: battery
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: statistics
+            cards:
+              - type: markdown
+                content: |
+                  ## Statistics
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                    }
+
+              - type: grid
+                columns: 5
+                square: false
+                cards:
+                  - type: tile
+                    entity: sensor.myburgh_park_bi_calibrated_voltage
+                    name: Current voltage
+                    icon: mdi:lightning-bolt
+
+                  - type: tile
+                    entity: sensor.myburgh_park_bi_battery_percentage
+                    name: Current battery
+                    icon: mdi:battery
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Lowest voltage today
+                    series:
+                      - entity: sensor.meshcore_02951be5e5_bat_myburgh_park
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_myburgh_park_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: min
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Highest voltage today
+                    series:
+                      - entity: sensor.meshcore_02951be5e5_bat_myburgh_park
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_myburgh_park_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: max
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Average voltage today
+                    series:
+                      - entity: sensor.meshcore_02951be5e5_bat_myburgh_park
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_myburgh_park_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: avg
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: health
+            cards:
+              - type: markdown
+                content: |
+                  ## Health
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                    }
+
+              - type: custom:button-card
+                template: meshcore_detail_health
+                entity: sensor.myburgh_park_bi_calibrated_voltage
+                variables:
+                  battery_entity: sensor.myburgh_park_bi_battery_percentage
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: intelligence
+            cards:
+              - type: markdown
+                content: |
+                  ## Battery Intelligence
+                card_mod:
+                  style: |
+                    ha-card {border:none;box-shadow:none;background:transparent;padding:0 5px;}
+              - type: grid
+                columns: 3
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: meshcore_battery_intelligence_readings
+                    entity: sensor.meshcore_02951be5e5_bat_myburgh_park
+                    variables:
+                      calibrated_voltage_entity: sensor.myburgh_park_bi_calibrated_voltage
+                      battery_entity: sensor.myburgh_park_bi_battery_percentage
+                      voltage_offset_entity: input_number.meshcore_myburgh_park_voltage_offset
+                      empty_voltage_entity: input_number.meshcore_myburgh_park_empty_voltage
+                      full_voltage_entity: input_number.meshcore_myburgh_park_full_voltage
+                  - type: entities
+                    show_header_toggle: false
+                    entities:
+                      - entity: input_number.meshcore_myburgh_park_voltage_offset
+                        name: Voltage Offset
+                      - entity: input_number.meshcore_myburgh_park_empty_voltage
+                        name: Empty Voltage
+                      - entity: input_number.meshcore_myburgh_park_full_voltage
+                        name: Full Voltage
+                  - type: custom:button-card
+                    template: meshcore_battery_intelligence_reset
+                    variables:
+                      voltage_offset_entity: input_number.meshcore_myburgh_park_voltage_offset
+                      empty_voltage_entity: input_number.meshcore_myburgh_park_empty_voltage
+                      full_voltage_entity: input_number.meshcore_myburgh_park_full_voltage
+
+  - title: Repeater Details
+    path: repeater-saldanha
+    subview: true
+    panel: true
+
+    cards:
+      - type: custom:layout-card
+        layout_type: custom:grid-layout
+
+        layout:
+          width: 100%
+          grid-template-columns: repeat(2,minmax(0,1fr))
+          grid-template-areas: |
+            "header header"
+            "voltage battery"
+            "statistics statistics"
+            "health health"
+            "intelligence intelligence"
+          column-gap: 16px
+          row-gap: 16px
+          margin: 16px
+
+        cards:
+          - type: custom:button-card
+            template: meshcore_detail_header
+            entity: sensor.saldanha_repeater_bi_calibrated_voltage
+            variables:
+              repeater_name: Saldanha
+              battery_entity: sensor.saldanha_repeater_bi_battery_percentage
+            view_layout:
+              grid-area: header
+
+          - type: custom:apexcharts-card
+            config_templates: meshcore_detail_voltage_chart
+            series:
+              - entity: sensor.meshcore_f9caec4ded_bat_saldanha
+                name: Saldanha Voltage
+                color: "#1a73e8"
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_saldanha_voltage_offset"]?.state);
+                  if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                  const calibrated = raw + offset;
+                  return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+            view_layout:
+              grid-area: voltage
+
+          - type: custom:apexcharts-card
+            config_templates: meshcore_detail_battery_chart
+            series:
+              - entity: sensor.meshcore_f9caec4ded_bat_saldanha
+                name: Saldanha Battery
+                color: "#34a853"
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_saldanha_voltage_offset"]?.state);
+                  const empty = Number(hass.states["input_number.meshcore_saldanha_empty_voltage"]?.state);
+                  const full = Number(hass.states["input_number.meshcore_saldanha_full_voltage"]?.state);
+                  if (![raw, offset, empty, full].every(Number.isFinite) || full <= empty) return null;
+                  const calibrated = raw + offset;
+                  if (calibrated < 2.5 || calibrated > 5.0) return null;
+                  return Math.min(100, Math.max(0, ((calibrated - empty) / (full - empty)) * 100));
+            view_layout:
+              grid-area: battery
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: statistics
+            cards:
+              - type: markdown
+                content: |
+                  ## Statistics
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                    }
+
+              - type: grid
+                columns: 5
+                square: false
+                cards:
+                  - type: tile
+                    entity: sensor.saldanha_repeater_bi_calibrated_voltage
+                    name: Current voltage
+                    icon: mdi:lightning-bolt
+
+                  - type: tile
+                    entity: sensor.saldanha_repeater_bi_battery_percentage
+                    name: Current battery
+                    icon: mdi:battery
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Lowest voltage today
+                    series:
+                      - entity: sensor.meshcore_f9caec4ded_bat_saldanha
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_saldanha_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: min
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Highest voltage today
+                    series:
+                      - entity: sensor.meshcore_f9caec4ded_bat_saldanha
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_saldanha_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: max
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Average voltage today
+                    series:
+                      - entity: sensor.meshcore_f9caec4ded_bat_saldanha
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_saldanha_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: avg
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: health
+            cards:
+              - type: markdown
+                content: |
+                  ## Health
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                    }
+
+              - type: custom:button-card
+                template: meshcore_detail_health
+                entity: sensor.saldanha_repeater_bi_calibrated_voltage
+                variables:
+                  battery_entity: sensor.saldanha_repeater_bi_battery_percentage
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: intelligence
+            cards:
+              - type: markdown
+                content: |
+                  ## Battery Intelligence
+                card_mod:
+                  style: |
+                    ha-card {border:none;box-shadow:none;background:transparent;padding:0 5px;}
+              - type: grid
+                columns: 3
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: meshcore_battery_intelligence_readings
+                    entity: sensor.meshcore_f9caec4ded_bat_saldanha
+                    variables:
+                      calibrated_voltage_entity: sensor.saldanha_repeater_bi_calibrated_voltage
+                      battery_entity: sensor.saldanha_repeater_bi_battery_percentage
+                      voltage_offset_entity: input_number.meshcore_saldanha_voltage_offset
+                      empty_voltage_entity: input_number.meshcore_saldanha_empty_voltage
+                      full_voltage_entity: input_number.meshcore_saldanha_full_voltage
+                  - type: entities
+                    show_header_toggle: false
+                    entities:
+                      - entity: input_number.meshcore_saldanha_voltage_offset
+                        name: Voltage Offset
+                      - entity: input_number.meshcore_saldanha_empty_voltage
+                        name: Empty Voltage
+                      - entity: input_number.meshcore_saldanha_full_voltage
+                        name: Full Voltage
+                  - type: custom:button-card
+                    template: meshcore_battery_intelligence_reset
+                    variables:
+                      voltage_offset_entity: input_number.meshcore_saldanha_voltage_offset
+                      empty_voltage_entity: input_number.meshcore_saldanha_empty_voltage
+                      full_voltage_entity: input_number.meshcore_saldanha_full_voltage
+
+  - title: Repeater Details
+    path: repeater-vredenburg
+    subview: true
+    panel: true
+
+    cards:
+      - type: custom:layout-card
+        layout_type: custom:grid-layout
+
+        layout:
+          width: 100%
+          grid-template-columns: repeat(2,minmax(0,1fr))
+          grid-template-areas: |
+            "header header"
+            "voltage battery"
+            "statistics statistics"
+            "health health"
+            "intelligence intelligence"
+          column-gap: 16px
+          row-gap: 16px
+          margin: 16px
+
+        cards:
+          - type: custom:button-card
+            template: meshcore_detail_header
+            entity: sensor.vredenburg_bi_calibrated_voltage
+            variables:
+              repeater_name: Vredenburg
+              battery_entity: sensor.vredenburg_bi_battery_percentage
+            view_layout:
+              grid-area: header
+
+          - type: custom:apexcharts-card
+            config_templates: meshcore_detail_voltage_chart
+            series:
+              - entity: sensor.meshcore_65297b53fa_bat_vredenburg
+                name: Vredenburg Voltage
+                color: "#1a73e8"
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_vredenburg_voltage_offset"]?.state);
+                  if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                  const calibrated = raw + offset;
+                  return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+            view_layout:
+              grid-area: voltage
+
+          - type: custom:apexcharts-card
+            config_templates: meshcore_detail_battery_chart
+            series:
+              - entity: sensor.meshcore_65297b53fa_bat_vredenburg
+                name: Vredenburg Battery
+                color: "#34a853"
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_vredenburg_voltage_offset"]?.state);
+                  const empty = Number(hass.states["input_number.meshcore_vredenburg_empty_voltage"]?.state);
+                  const full = Number(hass.states["input_number.meshcore_vredenburg_full_voltage"]?.state);
+                  if (![raw, offset, empty, full].every(Number.isFinite) || full <= empty) return null;
+                  const calibrated = raw + offset;
+                  if (calibrated < 2.5 || calibrated > 5.0) return null;
+                  return Math.min(100, Math.max(0, ((calibrated - empty) / (full - empty)) * 100));
+            view_layout:
+              grid-area: battery
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: statistics
+            cards:
+              - type: markdown
+                content: |
+                  ## Statistics
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                    }
+
+              - type: grid
+                columns: 5
+                square: false
+                cards:
+                  - type: tile
+                    entity: sensor.vredenburg_bi_calibrated_voltage
+                    name: Current voltage
+                    icon: mdi:lightning-bolt
+
+                  - type: tile
+                    entity: sensor.vredenburg_bi_battery_percentage
+                    name: Current battery
+                    icon: mdi:battery
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Lowest voltage today
+                    series:
+                      - entity: sensor.meshcore_65297b53fa_bat_vredenburg
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_vredenburg_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: min
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Highest voltage today
+                    series:
+                      - entity: sensor.meshcore_65297b53fa_bat_vredenburg
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_vredenburg_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: max
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Average voltage today
+                    series:
+                      - entity: sensor.meshcore_65297b53fa_bat_vredenburg
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_vredenburg_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: avg
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: health
+            cards:
+              - type: markdown
+                content: |
+                  ## Health
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                    }
+
+              - type: custom:button-card
+                template: meshcore_detail_health
+                entity: sensor.vredenburg_bi_calibrated_voltage
+                variables:
+                  battery_entity: sensor.vredenburg_bi_battery_percentage
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: intelligence
+            cards:
+              - type: markdown
+                content: |
+                  ## Battery Intelligence
+                card_mod:
+                  style: |
+                    ha-card {border:none;box-shadow:none;background:transparent;padding:0 5px;}
+              - type: grid
+                columns: 3
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: meshcore_battery_intelligence_readings
+                    entity: sensor.meshcore_65297b53fa_bat_vredenburg
+                    variables:
+                      calibrated_voltage_entity: sensor.vredenburg_bi_calibrated_voltage
+                      battery_entity: sensor.vredenburg_bi_battery_percentage
+                      voltage_offset_entity: input_number.meshcore_vredenburg_voltage_offset
+                      empty_voltage_entity: input_number.meshcore_vredenburg_empty_voltage
+                      full_voltage_entity: input_number.meshcore_vredenburg_full_voltage
+                  - type: entities
+                    show_header_toggle: false
+                    entities:
+                      - entity: input_number.meshcore_vredenburg_voltage_offset
+                        name: Voltage Offset
+                      - entity: input_number.meshcore_vredenburg_empty_voltage
+                        name: Empty Voltage
+                      - entity: input_number.meshcore_vredenburg_full_voltage
+                        name: Full Voltage
+                  - type: custom:button-card
+                    template: meshcore_battery_intelligence_reset
+                    variables:
+                      voltage_offset_entity: input_number.meshcore_vredenburg_voltage_offset
+                      empty_voltage_entity: input_number.meshcore_vredenburg_empty_voltage
+                      full_voltage_entity: input_number.meshcore_vredenburg_full_voltage
+
+  - title: Repeater Details
+    path: repeater-vredenburg-ne
+    subview: true
+    panel: true
+
+    cards:
+      - type: custom:layout-card
+        layout_type: custom:grid-layout
+
+        layout:
+          width: 100%
+          grid-template-columns: repeat(2,minmax(0,1fr))
+          grid-template-areas: |
+            "header header"
+            "voltage battery"
+            "statistics statistics"
+            "health health"
+            "intelligence intelligence"
+          column-gap: 16px
+          row-gap: 16px
+          margin: 16px
+
+        cards:
+          - type: custom:button-card
+            template: meshcore_detail_header
+            entity: sensor.vredenburg_ne_bi_calibrated_voltage
+            variables:
+              repeater_name: Vredenburg NE
+              battery_entity: sensor.vredenburg_ne_bi_battery_percentage
+            view_layout:
+              grid-area: header
+
+          - type: custom:apexcharts-card
+            config_templates: meshcore_detail_voltage_chart
+            series:
+              - entity: sensor.meshcore_2d1ada344b_bat_vredenburg_ne
+                name: Vredenburg NE Voltage
+                color: "#1a73e8"
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_vredenburg_ne_voltage_offset"]?.state);
+                  if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                  const calibrated = raw + offset;
+                  return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+            view_layout:
+              grid-area: voltage
+
+          - type: custom:apexcharts-card
+            config_templates: meshcore_detail_battery_chart
+            series:
+              - entity: sensor.meshcore_2d1ada344b_bat_vredenburg_ne
+                name: Vredenburg NE Battery
+                color: "#34a853"
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_vredenburg_ne_voltage_offset"]?.state);
+                  const empty = Number(hass.states["input_number.meshcore_vredenburg_ne_empty_voltage"]?.state);
+                  const full = Number(hass.states["input_number.meshcore_vredenburg_ne_full_voltage"]?.state);
+                  if (![raw, offset, empty, full].every(Number.isFinite) || full <= empty) return null;
+                  const calibrated = raw + offset;
+                  if (calibrated < 2.5 || calibrated > 5.0) return null;
+                  return Math.min(100, Math.max(0, ((calibrated - empty) / (full - empty)) * 100));
+            view_layout:
+              grid-area: battery
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: statistics
+            cards:
+              - type: markdown
+                content: |
+                  ## Statistics
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                    }
+
+              - type: grid
+                columns: 5
+                square: false
+                cards:
+                  - type: tile
+                    entity: sensor.vredenburg_ne_bi_calibrated_voltage
+                    name: Current voltage
+                    icon: mdi:lightning-bolt
+
+                  - type: tile
+                    entity: sensor.vredenburg_ne_bi_battery_percentage
+                    name: Current battery
+                    icon: mdi:battery
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Lowest voltage today
+                    series:
+                      - entity: sensor.meshcore_2d1ada344b_bat_vredenburg_ne
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_vredenburg_ne_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: min
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Highest voltage today
+                    series:
+                      - entity: sensor.meshcore_2d1ada344b_bat_vredenburg_ne
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_vredenburg_ne_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: max
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Average voltage today
+                    series:
+                      - entity: sensor.meshcore_2d1ada344b_bat_vredenburg_ne
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_vredenburg_ne_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: avg
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: health
+            cards:
+              - type: markdown
+                content: |
+                  ## Health
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                    }
+
+              - type: custom:button-card
+                template: meshcore_detail_health
+                entity: sensor.vredenburg_ne_bi_calibrated_voltage
+                variables:
+                  battery_entity: sensor.vredenburg_ne_bi_battery_percentage
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: intelligence
+            cards:
+              - type: markdown
+                content: |
+                  ## Battery Intelligence
+                card_mod:
+                  style: |
+                    ha-card {border:none;box-shadow:none;background:transparent;padding:0 5px;}
+              - type: grid
+                columns: 3
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: meshcore_battery_intelligence_readings
+                    entity: sensor.meshcore_2d1ada344b_bat_vredenburg_ne
+                    variables:
+                      calibrated_voltage_entity: sensor.vredenburg_ne_bi_calibrated_voltage
+                      battery_entity: sensor.vredenburg_ne_bi_battery_percentage
+                      voltage_offset_entity: input_number.meshcore_vredenburg_ne_voltage_offset
+                      empty_voltage_entity: input_number.meshcore_vredenburg_ne_empty_voltage
+                      full_voltage_entity: input_number.meshcore_vredenburg_ne_full_voltage
+                  - type: entities
+                    show_header_toggle: false
+                    entities:
+                      - entity: input_number.meshcore_vredenburg_ne_voltage_offset
+                        name: Voltage Offset
+                      - entity: input_number.meshcore_vredenburg_ne_empty_voltage
+                        name: Empty Voltage
+                      - entity: input_number.meshcore_vredenburg_ne_full_voltage
+                        name: Full Voltage
+                  - type: custom:button-card
+                    template: meshcore_battery_intelligence_reset
+                    variables:
+                      voltage_offset_entity: input_number.meshcore_vredenburg_ne_voltage_offset
+                      empty_voltage_entity: input_number.meshcore_vredenburg_ne_empty_voltage
+                      full_voltage_entity: input_number.meshcore_vredenburg_ne_full_voltage
+
+  - title: Repeater Details
+    path: repeater-laguna-2
+    subview: true
+    panel: true
+
+    cards:
+      - type: custom:layout-card
+        layout_type: custom:grid-layout
+
+        layout:
+          width: 100%
+          grid-template-columns: repeat(2,minmax(0,1fr))
+          grid-template-areas: |
+            "header header"
+            "voltage battery"
+            "statistics statistics"
+            "health health"
+            "intelligence intelligence"
+          column-gap: 16px
+          row-gap: 16px
+          margin: 16px
+
+        cards:
+          - type: custom:button-card
+            template: meshcore_detail_header
+            entity: sensor.laguna2_repeater_bi_calibrated_voltage
+            variables:
+              repeater_name: Laguna 2
+              battery_entity: sensor.laguna2_bi_battery_percentage
+            view_layout:
+              grid-area: header
+
+          - type: custom:apexcharts-card
+            config_templates: meshcore_detail_voltage_chart
+            series:
+              - entity: sensor.meshcore_01c1a4fa32_bat_laguna2
+                name: Laguna 2 Voltage
+                color: "#1a73e8"
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_laguna2_voltage_offset"]?.state);
+                  if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                  const calibrated = raw + offset;
+                  return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+            view_layout:
+              grid-area: voltage
+
+          - type: custom:apexcharts-card
+            config_templates: meshcore_detail_battery_chart
+            series:
+              - entity: sensor.meshcore_01c1a4fa32_bat_laguna2
+                name: Laguna 2 Battery
+                color: "#34a853"
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_laguna2_voltage_offset"]?.state);
+                  const empty = Number(hass.states["input_number.meshcore_laguna2_empty_voltage"]?.state);
+                  const full = Number(hass.states["input_number.meshcore_laguna2_full_voltage"]?.state);
+                  if (![raw, offset, empty, full].every(Number.isFinite) || full <= empty) return null;
+                  const calibrated = raw + offset;
+                  if (calibrated < 2.5 || calibrated > 5.0) return null;
+                  return Math.min(100, Math.max(0, ((calibrated - empty) / (full - empty)) * 100));
+            view_layout:
+              grid-area: battery
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: statistics
+            cards:
+              - type: markdown
+                content: |
+                  ## Statistics
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                    }
+
+              - type: grid
+                columns: 5
+                square: false
+                cards:
+                  - type: tile
+                    entity: sensor.laguna2_repeater_bi_calibrated_voltage
+                    name: Current voltage
+                    icon: mdi:lightning-bolt
+
+                  - type: tile
+                    entity: sensor.laguna2_bi_battery_percentage
+                    name: Current battery
+                    icon: mdi:battery
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Lowest voltage today
+                    series:
+                      - entity: sensor.meshcore_01c1a4fa32_bat_laguna2
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_laguna2_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: min
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Highest voltage today
+                    series:
+                      - entity: sensor.meshcore_01c1a4fa32_bat_laguna2
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_laguna2_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: max
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Average voltage today
+                    series:
+                      - entity: sensor.meshcore_01c1a4fa32_bat_laguna2
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_laguna2_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: avg
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: health
+            cards:
+              - type: markdown
+                content: |
+                  ## Health
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                    }
+
+              - type: custom:button-card
+                template: meshcore_detail_health
+                entity: sensor.laguna2_repeater_bi_calibrated_voltage
+                variables:
+                  battery_entity: sensor.laguna2_bi_battery_percentage
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: intelligence
+            cards:
+              - type: markdown
+                content: |
+                  ## Battery Intelligence
+                card_mod:
+                  style: |
+                    ha-card {border:none;box-shadow:none;background:transparent;padding:0 5px;}
+              - type: grid
+                columns: 3
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: meshcore_battery_intelligence_readings
+                    entity: sensor.meshcore_01c1a4fa32_bat_laguna2
+                    variables:
+                      calibrated_voltage_entity: sensor.laguna2_repeater_bi_calibrated_voltage
+                      battery_entity: sensor.laguna2_bi_battery_percentage
+                      voltage_offset_entity: input_number.meshcore_laguna2_voltage_offset
+                      empty_voltage_entity: input_number.meshcore_laguna2_empty_voltage
+                      full_voltage_entity: input_number.meshcore_laguna2_full_voltage
+                  - type: entities
+                    show_header_toggle: false
+                    entities:
+                      - entity: input_number.meshcore_laguna2_voltage_offset
+                        name: Voltage Offset
+                      - entity: input_number.meshcore_laguna2_empty_voltage
+                        name: Empty Voltage
+                      - entity: input_number.meshcore_laguna2_full_voltage
+                        name: Full Voltage
+                  - type: custom:button-card
+                    template: meshcore_battery_intelligence_reset
+                    variables:
+                      voltage_offset_entity: input_number.meshcore_laguna2_voltage_offset
+                      empty_voltage_entity: input_number.meshcore_laguna2_empty_voltage
+                      full_voltage_entity: input_number.meshcore_laguna2_full_voltage
+
+  - title: Repeater Details
+    path: repeater-promicro-test
+    subview: true
+    panel: true
+
+    cards:
+      - type: custom:layout-card
+        layout_type: custom:grid-layout
+
+        layout:
+          width: 100%
+          grid-template-columns: repeat(2,minmax(0,1fr))
+          grid-template-areas: |
+            "header header"
+            "voltage battery"
+            "statistics statistics"
+            "health health"
+            "intelligence intelligence"
+          column-gap: 16px
+          row-gap: 16px
+          margin: 16px
+
+        cards:
+          - type: custom:button-card
+            template: meshcore_detail_header
+            entity: sensor.promicro_test_repeater_bi_calibrated_voltage
+            variables:
+              repeater_name: ProMicro Test
+              battery_entity: sensor.promicro_test_repeater_bi_battery_percentage
+            view_layout:
+              grid-area: header
+
+          - type: custom:apexcharts-card
+            config_templates: meshcore_detail_voltage_chart
+            series:
+              - entity: sensor.meshcore_04560eba43_bat_promicro_test_repeater
+                name: ProMicro Test Voltage
+                color: "#1a73e8"
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_promicro_test_repeater_voltage_offset"]?.state);
+                  if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                  const calibrated = raw + offset;
+                  return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+            view_layout:
+              grid-area: voltage
+
+          - type: custom:apexcharts-card
+            config_templates: meshcore_detail_battery_chart
+            series:
+              - entity: sensor.meshcore_04560eba43_bat_promicro_test_repeater
+                name: ProMicro Test Battery
+                color: "#34a853"
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_promicro_test_repeater_voltage_offset"]?.state);
+                  const empty = Number(hass.states["input_number.meshcore_promicro_test_repeater_empty_voltage"]?.state);
+                  const full = Number(hass.states["input_number.meshcore_promicro_test_repeater_full_voltage"]?.state);
+                  if (![raw, offset, empty, full].every(Number.isFinite) || full <= empty) return null;
+                  const calibrated = raw + offset;
+                  if (calibrated < 2.5 || calibrated > 5.0) return null;
+                  return Math.min(100, Math.max(0, ((calibrated - empty) / (full - empty)) * 100));
+            view_layout:
+              grid-area: battery
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: statistics
+            cards:
+              - type: markdown
+                content: |
+                  ## Statistics
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                    }
+
+              - type: grid
+                columns: 5
+                square: false
+                cards:
+                  - type: tile
+                    entity: sensor.promicro_test_repeater_bi_calibrated_voltage
+                    name: Current voltage
+                    icon: mdi:lightning-bolt
+
+                  - type: tile
+                    entity: sensor.promicro_test_repeater_bi_battery_percentage
+                    name: Current battery
+                    icon: mdi:battery
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Lowest voltage today
+                    series:
+                      - entity: sensor.meshcore_04560eba43_bat_promicro_test_repeater
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_promicro_test_repeater_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: min
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Highest voltage today
+                    series:
+                      - entity: sensor.meshcore_04560eba43_bat_promicro_test_repeater
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_promicro_test_repeater_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: max
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Average voltage today
+                    series:
+                      - entity: sensor.meshcore_04560eba43_bat_promicro_test_repeater
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_promicro_test_repeater_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: avg
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: health
+            cards:
+              - type: markdown
+                content: |
+                  ## Health
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                    }
+
+              - type: custom:button-card
+                template: meshcore_detail_health
+                entity: sensor.promicro_test_repeater_bi_calibrated_voltage
+                variables:
+                  battery_entity: sensor.promicro_test_repeater_bi_battery_percentage
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: intelligence
+            cards:
+              - type: markdown
+                content: |
+                  ## Battery Intelligence
+                card_mod:
+                  style: |
+                    ha-card {border:none;box-shadow:none;background:transparent;padding:0 5px;}
+              - type: grid
+                columns: 3
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: meshcore_battery_intelligence_readings
+                    entity: sensor.meshcore_04560eba43_bat_promicro_test_repeater
+                    variables:
+                      calibrated_voltage_entity: sensor.promicro_test_repeater_bi_calibrated_voltage
+                      battery_entity: sensor.promicro_test_repeater_bi_battery_percentage
+                      voltage_offset_entity: input_number.meshcore_promicro_test_repeater_voltage_offset
+                      empty_voltage_entity: input_number.meshcore_promicro_test_repeater_empty_voltage
+                      full_voltage_entity: input_number.meshcore_promicro_test_repeater_full_voltage
+                  - type: entities
+                    show_header_toggle: false
+                    entities:
+                      - entity: input_number.meshcore_promicro_test_repeater_voltage_offset
+                        name: Voltage Offset
+                      - entity: input_number.meshcore_promicro_test_repeater_empty_voltage
+                        name: Empty Voltage
+                      - entity: input_number.meshcore_promicro_test_repeater_full_voltage
+                        name: Full Voltage
+                  - type: custom:button-card
+                    template: meshcore_battery_intelligence_reset
+                    variables:
+                      voltage_offset_entity: input_number.meshcore_promicro_test_repeater_voltage_offset
+                      empty_voltage_entity: input_number.meshcore_promicro_test_repeater_empty_voltage
+                      full_voltage_entity: input_number.meshcore_promicro_test_repeater_full_voltage
+
+  - title: Repeater Details
+    path: repeater-test-solar
+    subview: true
+    panel: true
+
+    cards:
+      - type: custom:layout-card
+        layout_type: custom:grid-layout
+
+        layout:
+          width: 100%
+          grid-template-columns: repeat(2,minmax(0,1fr))
+          grid-template-areas: |
+            "header header"
+            "voltage battery"
+            "statistics statistics"
+            "health health"
+            "intelligence intelligence"
+          column-gap: 16px
+          row-gap: 16px
+          margin: 16px
+
+        cards:
+          - type: custom:button-card
+            template: meshcore_detail_header
+            entity: sensor.test_solar_repeater_bi_calibrated_voltage
+            variables:
+              repeater_name: Test Solar
+              battery_entity: sensor.test_solar_bi_battery_percentage
+            view_layout:
+              grid-area: header
+
+          - type: custom:apexcharts-card
+            config_templates: meshcore_detail_voltage_chart
+            series:
+              - entity: sensor.meshcore_23b033ff3a_bat_test_solar
+                name: Test Solar Voltage
+                color: "#1a73e8"
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_test_solar_voltage_offset"]?.state);
+                  if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                  const calibrated = raw + offset;
+                  return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+            view_layout:
+              grid-area: voltage
+
+          - type: custom:apexcharts-card
+            config_templates: meshcore_detail_battery_chart
+            series:
+              - entity: sensor.meshcore_23b033ff3a_bat_test_solar
+                name: Test Solar Battery
+                color: "#34a853"
+                transform: |
+                  const raw = Number(x);
+                  const offset = Number(hass.states["input_number.meshcore_test_solar_voltage_offset"]?.state);
+                  const empty = Number(hass.states["input_number.meshcore_test_solar_empty_voltage"]?.state);
+                  const full = Number(hass.states["input_number.meshcore_test_solar_full_voltage"]?.state);
+                  if (![raw, offset, empty, full].every(Number.isFinite) || full <= empty) return null;
+                  const calibrated = raw + offset;
+                  if (calibrated < 2.5 || calibrated > 5.0) return null;
+                  return Math.min(100, Math.max(0, ((calibrated - empty) / (full - empty)) * 100));
+            view_layout:
+              grid-area: battery
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: statistics
+            cards:
+              - type: markdown
+                content: |
+                  ## Statistics
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                    }
+
+              - type: grid
+                columns: 5
+                square: false
+                cards:
+                  - type: tile
+                    entity: sensor.test_solar_repeater_bi_calibrated_voltage
+                    name: Current voltage
+                    icon: mdi:lightning-bolt
+
+                  - type: tile
+                    entity: sensor.test_solar_bi_battery_percentage
+                    name: Current battery
+                    icon: mdi:battery
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Lowest voltage today
+                    series:
+                      - entity: sensor.meshcore_23b033ff3a_bat_test_solar
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_test_solar_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: min
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Highest voltage today
+                    series:
+                      - entity: sensor.meshcore_23b033ff3a_bat_test_solar
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_test_solar_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: max
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+                  - type: custom:apexcharts-card
+                    config_templates: meshcore_detail_voltage_statistic
+                    header:
+                      title: Average voltage today
+                    series:
+                      - entity: sensor.meshcore_23b033ff3a_bat_test_solar
+                        name: Voltage
+                        unit: V
+                        color: "#1a73e8"
+                        float_precision: 3
+                        fill_raw: "null"
+                        transform: |
+                          const raw = Number(x);
+                          const offset = Number(hass.states["input_number.meshcore_test_solar_voltage_offset"]?.state);
+                          if (!Number.isFinite(raw) || !Number.isFinite(offset)) return null;
+                          const calibrated = raw + offset;
+                          return calibrated >= 2.5 && calibrated <= 5.0 ? calibrated : null;
+                        group_by:
+                          func: avg
+                          duration: 24h
+                          fill: "null"
+                        show:
+                          in_chart: false
+                          in_header: true
+                          legend_value: false
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: health
+            cards:
+              - type: markdown
+                content: |
+                  ## Health
+
+                card_mod:
+                  style: |
+                    ha-card {
+                      border: none;
+                      box-shadow: none;
+                      background: transparent;
+                      padding: 0 5px;
+                    }
+
+              - type: custom:button-card
+                template: meshcore_detail_health
+                entity: sensor.test_solar_repeater_bi_calibrated_voltage
+                variables:
+                  battery_entity: sensor.test_solar_bi_battery_percentage
+
+          - type: vertical-stack
+            view_layout:
+              grid-area: intelligence
+            cards:
+              - type: markdown
+                content: |
+                  ## Battery Intelligence
+                card_mod:
+                  style: |
+                    ha-card {border:none;box-shadow:none;background:transparent;padding:0 5px;}
+              - type: grid
+                columns: 3
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: meshcore_battery_intelligence_readings
+                    entity: sensor.meshcore_23b033ff3a_bat_test_solar
+                    variables:
+                      calibrated_voltage_entity: sensor.test_solar_repeater_bi_calibrated_voltage
+                      battery_entity: sensor.test_solar_bi_battery_percentage
+                      voltage_offset_entity: input_number.meshcore_test_solar_voltage_offset
+                      empty_voltage_entity: input_number.meshcore_test_solar_empty_voltage
+                      full_voltage_entity: input_number.meshcore_test_solar_full_voltage
+                  - type: entities
+                    show_header_toggle: false
+                    entities:
+                      - entity: input_number.meshcore_test_solar_voltage_offset
+                        name: Voltage Offset
+                      - entity: input_number.meshcore_test_solar_empty_voltage
+                        name: Empty Voltage
+                      - entity: input_number.meshcore_test_solar_full_voltage
+                        name: Full Voltage
+                  - type: custom:button-card
+                    template: meshcore_battery_intelligence_reset
+                    variables:
+                      voltage_offset_entity: input_number.meshcore_test_solar_voltage_offset
+                      empty_voltage_entity: input_number.meshcore_test_solar_empty_voltage
+                      full_voltage_entity: input_number.meshcore_test_solar_full_voltage
