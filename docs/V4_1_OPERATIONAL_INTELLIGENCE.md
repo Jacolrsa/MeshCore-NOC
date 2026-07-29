@@ -151,6 +151,24 @@ queue task, and calculate a fresh next run. Optional rotating order advances
 the starting repeater after each completed run without changing configured
 managed order.
 
+### Fleet clock synchronisation
+
+The central Clock Management dashboard uses the same managed addressability map
+for fleet clock checks and synchronisation. The
+`meshcore_noc.sync_all_repeater_clocks` action snapshots all currently managed,
+addressable repeaters and processes them sequentially. One failed repeater does
+not stop the remaining queue, and check, single-sync, and fleet-sync operations
+share a concurrency gate.
+
+Automatic synchronisation is disabled by default. Supported intervals are 6,
+12, 24, 72, and 168 hours; the default is 24 hours. The integration persists
+the last terminal summary and next due time, rebuilds one timer on reload, and
+runs at most one overdue synchronization after startup.
+
+Repeaters receive the connected MeshCore companion node's clock, not Home
+Assistant's clock directly. Confirm that source clock before enabling automatic
+synchronisation.
+
 Fleet diagnostics include configuration, current run, queue, scheduler state,
 next scheduled run, skipped scheduled starts, last summary, the latest 20
 in-memory summaries, and non-addressable exclusions. Fleet entities are:

@@ -21,8 +21,10 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     CONF_AUTO_FLEET_CLOCK_CHECKS,
+    CONF_AUTO_FLEET_CLOCK_SYNC,
     CONF_CLOCK_CHECK_COOLDOWN,
     CONF_FLEET_CLOCK_INTERVAL_HOURS,
+    CONF_FLEET_CLOCK_SYNC_INTERVAL_HOURS,
     CONF_FLEET_FAILURE_DELAY,
     CONF_FLEET_ROTATING_START,
     CONF_FLEET_SUCCESS_DELAY,
@@ -30,13 +32,16 @@ from .const import (
     CONF_MESHCORE_CONFIG_ENTRY_IDS,
     CONF_UPDATE_CHANNEL,
     DEFAULT_AUTO_FLEET_CLOCK_CHECKS,
+    DEFAULT_AUTO_FLEET_CLOCK_SYNC,
     DEFAULT_CLOCK_CHECK_COOLDOWN,
     DEFAULT_FLEET_CLOCK_INTERVAL_HOURS,
+    DEFAULT_FLEET_CLOCK_SYNC_INTERVAL_HOURS,
     DEFAULT_FLEET_FAILURE_DELAY,
     DEFAULT_FLEET_ROTATING_START,
     DEFAULT_FLEET_SUCCESS_DELAY,
     DEFAULT_UPDATE_CHANNEL,
     DOMAIN,
+    FLEET_CLOCK_SYNC_INTERVAL_OPTIONS,
     INTEGRATION_NAME,
     MAX_CLOCK_CHECK_COOLDOWN,
     MAX_FLEET_CLOCK_INTERVAL_HOURS,
@@ -107,6 +112,8 @@ def _selection_schema(
     fleet_success_delay: int = DEFAULT_FLEET_SUCCESS_DELAY,
     fleet_failure_delay: int = DEFAULT_FLEET_FAILURE_DELAY,
     fleet_rotating_start: bool = DEFAULT_FLEET_ROTATING_START,
+    auto_fleet_clock_sync: bool = DEFAULT_AUTO_FLEET_CLOCK_SYNC,
+    fleet_clock_sync_interval_hours: int = DEFAULT_FLEET_CLOCK_SYNC_INTERVAL_HOURS,
 ) -> vol.Schema:
     """Build a stable-ID multi-select with type-prefixed display labels."""
     options = _selection_options(repeaters)
@@ -180,6 +187,27 @@ def _selection_schema(
             vol.Required(
                 CONF_FLEET_ROTATING_START, default=fleet_rotating_start
             ): BooleanSelector(),
+            vol.Required(
+                CONF_AUTO_FLEET_CLOCK_SYNC, default=auto_fleet_clock_sync
+            ): BooleanSelector(),
+            vol.Required(
+                CONF_FLEET_CLOCK_SYNC_INTERVAL_HOURS,
+                default=str(fleet_clock_sync_interval_hours),
+            ): SelectSelector(
+                SelectSelectorConfig(
+                    options=[
+                        {"value": str(hours), "label": label}
+                        for hours, label in (
+                            (6, "6 hours"),
+                            (12, "12 hours"),
+                            (24, "24 hours"),
+                            (72, "3 days"),
+                            (168, "7 days"),
+                        )
+                    ],
+                    multiple=False,
+                )
+            ),
         }
     )
 
@@ -225,6 +253,29 @@ def _valid_fleet_options(options: Mapping[str, Any]) -> bool:
     )
 
 
+def _sync_options(user_input: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalize automatic fleet synchronization options."""
+    return {
+        CONF_AUTO_FLEET_CLOCK_SYNC: bool(
+            user_input.get(CONF_AUTO_FLEET_CLOCK_SYNC, DEFAULT_AUTO_FLEET_CLOCK_SYNC)
+        ),
+        CONF_FLEET_CLOCK_SYNC_INTERVAL_HOURS: int(
+            user_input.get(
+                CONF_FLEET_CLOCK_SYNC_INTERVAL_HOURS,
+                DEFAULT_FLEET_CLOCK_SYNC_INTERVAL_HOURS,
+            )
+        ),
+    }
+
+
+def _valid_sync_options(options: Mapping[str, Any]) -> bool:
+    """Restrict automatic synchronization to the documented intervals."""
+    return (
+        options[CONF_FLEET_CLOCK_SYNC_INTERVAL_HOURS]
+        in FLEET_CLOCK_SYNC_INTERVAL_OPTIONS
+    )
+
+
 class MeshCoreNocConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Configure the single MeshCore NOC instance."""
 
@@ -250,6 +301,7 @@ class MeshCoreNocConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input.get(CONF_CLOCK_CHECK_COOLDOWN, DEFAULT_CLOCK_CHECK_COOLDOWN)
             )
             fleet_options = _fleet_options(user_input)
+            sync_options = _sync_options(user_input)
             valid_ids = set(discovery.repeaters)
             invalid_selection = any(
                 stable_id not in valid_ids for stable_id in selected
@@ -264,6 +316,7 @@ class MeshCoreNocConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 or update_channel not in _UPDATE_CHANNELS
                 or invalid_cooldown
                 or not _valid_fleet_options(fleet_options)
+                or not _valid_sync_options(sync_options)
             ):
                 return self.async_show_form(
                     step_id="user",
@@ -273,6 +326,7 @@ class MeshCoreNocConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         update_channel,
                         clock_check_cooldown,
                         **fleet_options,
+                        **sync_options,
                     ),
                     errors={
                         "base": (
@@ -302,6 +356,7 @@ class MeshCoreNocConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_UPDATE_CHANNEL: update_channel,
                     CONF_CLOCK_CHECK_COOLDOWN: clock_check_cooldown,
                     **fleet_options,
+                    **sync_options,
                 },
             )
 
@@ -337,6 +392,7 @@ class MeshCoreNocOptionsFlow(config_entries.OptionsFlow):
             )
         )
         current_fleet_options = _fleet_options(self.config_entry.options)
+        current_sync_options = _sync_options(self.config_entry.options)
         if user_input is not None:
             selected = list(user_input[CONF_MANAGED_REPEATER_IDS])
             update_channel = user_input.get(CONF_UPDATE_CHANNEL, current_channel)
@@ -349,6 +405,7 @@ class MeshCoreNocOptionsFlow(config_entries.OptionsFlow):
                     {**current_fleet_options, **user_input}
                 ).items()
             }
+            sync_options = _sync_options({**current_sync_options, **user_input})
             valid_ids = set(discovery.repeaters)
             invalid_selection = any(
                 stable_id not in valid_ids for stable_id in selected
@@ -363,6 +420,7 @@ class MeshCoreNocOptionsFlow(config_entries.OptionsFlow):
                 or update_channel not in _UPDATE_CHANNELS
                 or invalid_cooldown
                 or not _valid_fleet_options(fleet_options)
+                or not _valid_sync_options(sync_options)
             ):
                 return self.async_show_form(
                     step_id="init",
@@ -372,6 +430,7 @@ class MeshCoreNocOptionsFlow(config_entries.OptionsFlow):
                         update_channel,
                         clock_check_cooldown,
                         **fleet_options,
+                        **sync_options,
                     ),
                     errors={
                         "base": (
@@ -396,6 +455,7 @@ class MeshCoreNocOptionsFlow(config_entries.OptionsFlow):
                     CONF_UPDATE_CHANNEL: update_channel,
                     CONF_CLOCK_CHECK_COOLDOWN: clock_check_cooldown,
                     **fleet_options,
+                    **sync_options,
                 },
             )
 
@@ -407,5 +467,6 @@ class MeshCoreNocOptionsFlow(config_entries.OptionsFlow):
                 current_channel,
                 current_clock_check_cooldown,
                 **current_fleet_options,
+                **current_sync_options,
             ),
         )

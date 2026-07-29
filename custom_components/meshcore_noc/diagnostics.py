@@ -43,6 +43,7 @@ async def async_get_config_entry_diagnostics(
     duplicate_detection = _duplicate_detection(hass, entry, active_ids)
     updater = entry.runtime_data.update_coordinator
     fleet = entry.runtime_data.fleet_clock_orchestrator
+    fleet_sync = entry.runtime_data.fleet_clock_sync_orchestrator
     retained_results = {}
     for stable_id in entry.runtime_data.clock_manager.targets:
         clock_result = entry.runtime_data.clock_manager.result_for(stable_id)
@@ -160,6 +161,10 @@ async def async_get_config_entry_diagnostics(
                         entry.runtime_data.clock_manager.non_addressable_repeaters
                     )
                 ],
+            },
+            "fleet_sync": {
+                "configuration": fleet_sync.config.as_dict(),
+                **fleet_sync.state_attributes,
             },
         },
         "reconciliation": {

@@ -18,6 +18,10 @@ from custom_components.meshcore_noc.fleet_clock import (
     FleetClockConfig,
     FleetClockOrchestrator,
 )
+from custom_components.meshcore_noc.fleet_sync import (
+    FleetClockSyncConfig,
+    FleetClockSyncOrchestrator,
+)
 from custom_components.meshcore_noc.models import (
     CommandAddressResolution,
     DeviceType,
@@ -35,7 +39,13 @@ def _register_services(hass, manager):
         manager,
         FleetClockConfig(False, 6, 15, 30, False),
     )
-    _async_register_clock_services(hass, manager, fleet)
+    fleet_sync = FleetClockSyncOrchestrator(
+        hass,
+        manager,
+        FleetClockSyncConfig(False, 24, 2),
+        storage_key="test_fleet_sync",
+    )
+    _async_register_clock_services(hass, manager, fleet, fleet_sync)
     return fleet
 
 
@@ -104,7 +114,9 @@ async def test_service_selector_values_match_accepted_stable_ids(
     assert target.stable_id == "01c1a4fa32c6"
     assert target.pubkey_prefix == "01c1a4fa32c6"
     assert descriptions[DOMAIN]["check_all_clocks"]["fields"] == {}
+    assert descriptions[DOMAIN]["sync_all_repeater_clocks"]["fields"] == {}
     assert descriptions[DOMAIN]["cancel_clock_check"]["fields"] == {}
+    assert hass.services.has_service(DOMAIN, "sync_all_repeater_clocks")
     service = hass.services.async_services()[DOMAIN]["sync_repeater_clock"]
     with pytest.raises(vol.Invalid, match="repeater_id"):
         service.schema({})

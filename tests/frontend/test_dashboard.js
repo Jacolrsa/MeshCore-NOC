@@ -132,6 +132,27 @@ const hass = {
       config_entry_id: "entry",
       unique_id: "noc_cancel_clock_check",
     },
+    fleetSyncState: {
+      entity_id: "sensor.fleet_clock_sync_state",
+      device_id: "controller",
+      platform: "meshcore_noc",
+      config_entry_id: "entry",
+      unique_id: "noc_fleet_clock_sync_state",
+    },
+    lastFleetSync: {
+      entity_id: "sensor.last_fleet_clock_sync",
+      device_id: "controller",
+      platform: "meshcore_noc",
+      config_entry_id: "entry",
+      unique_id: "noc_last_fleet_clock_sync",
+    },
+    syncAll: {
+      entity_id: "button.sync_all_repeater_clocks",
+      device_id: "controller",
+      platform: "meshcore_noc",
+      config_entry_id: "entry",
+      unique_id: "noc_sync_all_repeater_clocks",
+    },
     update: {
       entity_id: "update.meshcore_noc_update",
       device_id: "controller",
@@ -196,6 +217,24 @@ const hass = {
       state: "2026-07-28T08:13:10+00:00",
       attributes: {},
     },
+    "sensor.fleet_clock_sync_state": {
+      state: "idle",
+      attributes: {
+        fleet_sync_running: false,
+        fleet_sync_completed_count: 3,
+        fleet_sync_total_count: 3,
+        last_fleet_sync_result: "completed",
+        last_fleet_sync_successful: 2,
+        last_fleet_sync_already_ahead: 1,
+        last_fleet_sync_failed: 0,
+        automatic_sync_enabled: false,
+        automatic_sync_interval: 24,
+      },
+    },
+    "sensor.last_fleet_clock_sync": {
+      state: "2026-07-28T09:13:10+00:00",
+      attributes: {},
+    },
     "update.meshcore_noc_update": {
       state: "off",
       attributes: { installed_version: "1.0.0" },
@@ -217,10 +256,13 @@ const fleetClock = dashboard.discoverFleetClock(hass);
 assert.equal(fleetClock.checkAll, "button.check_all_clocks");
 assert.equal(fleetClock.cancel, "button.cancel_clock_check");
 assert.equal(fleetClock.running, "binary_sensor.clock_check_running");
+assert.equal(fleetClock.syncAll, "button.sync_all_repeater_clocks");
+assert.equal(fleetClock.syncState, "sensor.fleet_clock_sync_state");
 const runningFleet = dashboard.fleetClockMetrics(hass, fleetClock);
 assert.equal(runningFleet.active, true);
 assert.deepEqual(dashboard.fleetControlState(runningFleet), {
   checkAllDisabled: true,
+  syncAllDisabled: true,
   cancelDisabled: false,
 });
 assert.equal(runningFleet.currentRepeater, "Laguna2");
@@ -237,7 +279,7 @@ assert.deepEqual(
   dashboard.fleetControlState(
     dashboard.fleetClockMetrics(idleFleetHass, fleetClock),
   ),
-  { checkAllDisabled: false, cancelDisabled: true },
+  { checkAllDisabled: false, syncAllDisabled: false, cancelDisabled: true },
 );
 const completedFleetHass = structuredClone(hass);
 completedFleetHass.states["sensor.clock_check_state"] = {
@@ -297,8 +339,14 @@ assert.equal(
 );
 assert.equal(
   dashboard.signedClockOffset(hass, "sensor.managed_clock_offset"),
-  "-352 s",
+  "−5m 52s",
 );
+assert.equal(dashboard.readableClockOffset(59), "+59 s");
+assert.equal(dashboard.readableClockOffset(-3661), "−1h 1m");
+const syncFleet = dashboard.fleetSyncMetrics(hass, fleetClock);
+assert.equal(syncFleet.successful, 2);
+assert.equal(syncFleet.alreadyAhead, 1);
+assert.equal(syncFleet.interval, 24);
 assert.equal(
   dashboard.repeaterClockBusy(hass, repeaters[0], runningFleet),
   true,
@@ -310,6 +358,10 @@ assert.equal(
 assert.equal(
   dashboard.actionRequestMessage("fleet"),
   "Fleet clock check started",
+);
+assert.equal(
+  dashboard.actionRequestMessage("fleet-sync"),
+  "Fleet clock synchronisation started",
 );
 assert.equal(dashboard.actionRequestMessage("cancel"), "Cancel requested");
 assert.equal(
@@ -349,6 +401,15 @@ const clockDashboardSource = fs.readFileSync(
 assert.equal(clockDashboardSource.includes("send_cmd"), false);
 assert.equal(clockDashboardSource.includes("meshcore.execute_command"), false);
 assert(clockDashboardSource.includes("Check All Clocks"));
+assert(clockDashboardSource.includes("Synchronise All Clocks"));
+assert(clockDashboardSource.includes("Synchronising…"));
+assert(clockDashboardSource.includes("Clock Management"));
+assert(
+  clockDashboardSource.includes(
+    "Repeaters are synchronised to the connected MeshCore companion clock",
+  ),
+);
+assert(clockDashboardSource.includes("clock-result-row"));
 assert(clockDashboardSource.includes("Cancel Check"));
 assert(clockDashboardSource.includes("action-feedback"));
 assert(clockDashboardSource.includes("Action failed:"));

@@ -354,6 +354,7 @@ class MeshCoreNocClockManager:
         self._listeners: dict[str, list[Callable[[], None]]] = {}
         self._fleet_run_id: str | None = None
         self._fleet_reserved_ids: set[str] = set()
+        self._fleet_sync_run_id: str | None = None
         self._unsub_raw_event: Callable[[], None] | None = None
         self.last_request: dict[str, Any] | None = None
         self.last_response: dict[str, Any] | None = None
@@ -376,6 +377,21 @@ class MeshCoreNocClockManager:
     def history(self) -> list[dict[str, Any]]:
         """Return the rolling last-20 history."""
         return [entry.as_dict() for entry in self._history]
+
+    @property
+    def sync_in_progress(self) -> bool:
+        """Return whether any single or fleet synchronization is active."""
+        return bool(self._pending_sync) or self._fleet_sync_run_id is not None
+
+    @property
+    def fleet_sync_active(self) -> bool:
+        """Return whether the fleet synchronization queue owns operations."""
+        return self._fleet_sync_run_id is not None
+
+    @property
+    def check_in_progress(self) -> bool:
+        """Return whether a single or fleet read-only check is active."""
+        return bool(self._pending) or self._fleet_run_id is not None
 
     def result_for(self, stable_id: str) -> ClockResult | None:
         """Return current clock information for a managed target."""
@@ -414,6 +430,10 @@ class MeshCoreNocClockManager:
 
     def reserve_fleet_targets(self, run_id: str, stable_ids: tuple[str, ...]) -> None:
         """Reserve one immutable fleet snapshot against manual overlap."""
+        if self.sync_in_progress:
+            raise ClockCheckFleetCollisionError(
+                "A clock synchronization is already active"
+            )
         if self._fleet_run_id is not None:
             raise ClockCheckFleetCollisionError(
                 f"Fleet clock run {self._fleet_run_id} already owns the queue"
@@ -426,6 +446,27 @@ class MeshCoreNocClockManager:
         if self._fleet_run_id == run_id:
             self._fleet_run_id = None
             self._fleet_reserved_ids.clear()
+
+    def begin_fleet_sync(self, run_id: str) -> None:
+        """Acquire the integration-wide clock-operation gate for fleet sync."""
+        if self._fleet_sync_run_id is not None:
+            raise ClockCheckFleetCollisionError(
+                f"Fleet clock synchronization {self._fleet_sync_run_id} is active"
+            )
+        if self._fleet_run_id is not None:
+            raise ClockCheckFleetCollisionError(
+                f"Fleet clock check {self._fleet_run_id} is active"
+            )
+        if self._pending or self._pending_sync:
+            raise ClockCheckFleetCollisionError(
+                "A single-repeater clock operation is already active"
+            )
+        self._fleet_sync_run_id = run_id
+
+    def end_fleet_sync(self, run_id: str | None = None) -> None:
+        """Release the fleet synchronization operation gate."""
+        if run_id is None or self._fleet_sync_run_id == run_id:
+            self._fleet_sync_run_id = None
 
     def async_start(self) -> None:
         """Subscribe once to the public raw MeshCore event."""
@@ -451,6 +492,7 @@ class MeshCoreNocClockManager:
         for task in tuple(self._sync_tasks):
             task.cancel()
         self._sync_tasks.clear()
+        self._fleet_sync_run_id = None
 
     @callback
     def async_add_listener(
@@ -512,6 +554,10 @@ class MeshCoreNocClockManager:
         supplied_identifier = stable_id
         target = self.resolve_target(supplied_identifier)
         stable_id = target.stable_id
+        if not sync_operation and self._fleet_sync_run_id is not None:
+            raise ClockCheckFleetCollisionError(
+                "A fleet clock synchronization is already active"
+            )
         if not sync_operation and target.pubkey_prefix.lower() in self._pending_sync:
             raise ClockCheckInProgressError(
                 f"A clock synchronization is already pending for {stable_id}"
@@ -632,7 +678,12 @@ class MeshCoreNocClockManager:
         finally:
             self._pending.pop(prefix, None)
 
-    async def async_sync_repeater_clock(self, repeater_id: str) -> ClockSyncResult:
+    async def async_sync_repeater_clock(
+        self,
+        repeater_id: str,
+        *,
+        fleet_sync_run_id: str | None = None,
+    ) -> ClockSyncResult:
         """Synchronize one managed repeater and verify it with read-only checks."""
         started_at = self._utc_now()
         try:
@@ -649,6 +700,29 @@ class MeshCoreNocClockManager:
             )
 
         prefix = target.pubkey_prefix.lower()
+        if (
+            self._fleet_sync_run_id is not None
+            and fleet_sync_run_id != self._fleet_sync_run_id
+        ):
+            return ClockSyncResult(
+                stable_id=target.stable_id,
+                pubkey_prefix=target.pubkey_prefix,
+                result=ClockSyncState.FAILED,
+                started_at=started_at,
+                completed_at=self._utc_now(),
+                duration_seconds=0.0,
+                error="a fleet clock synchronization is already active",
+            )
+        if self._fleet_run_id is not None:
+            return ClockSyncResult(
+                stable_id=target.stable_id,
+                pubkey_prefix=target.pubkey_prefix,
+                result=ClockSyncState.FAILED,
+                started_at=started_at,
+                completed_at=self._utc_now(),
+                duration_seconds=0.0,
+                error="a fleet clock check is already active",
+            )
         if prefix in self._pending_sync or prefix in self._pending:
             return ClockSyncResult(
                 stable_id=target.stable_id,

@@ -523,7 +523,7 @@ async def test_eight_repeaters_keep_their_own_normalized_names(
                 if entry.entity_id.split(".", 1)[0] in {"sensor", "binary_sensor"}
             ]
         )
-        == 37
+        == 39
     )
 
 
@@ -562,7 +562,7 @@ async def test_duplicate_friendly_names_keep_stable_identity(
         for entry in entries
         if entry.entity_id.split(".", 1)[0] in {"sensor", "binary_sensor"}
     ]
-    assert len(unique_ids) == 13
+    assert len(unique_ids) == 15
     assert len(unique_ids) == len(set(unique_ids))
 
     diagnostics = await async_get_config_entry_diagnostics(hass, noc_entry)

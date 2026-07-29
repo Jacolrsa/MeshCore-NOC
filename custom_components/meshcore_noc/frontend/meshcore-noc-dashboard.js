@@ -27,6 +27,9 @@
     noc_clock_check_running: "running",
     noc_check_all_clocks: "checkAll",
     noc_cancel_clock_check: "cancel",
+    noc_fleet_clock_sync_state: "syncState",
+    noc_last_fleet_clock_sync: "lastSync",
+    noc_sync_all_repeater_clocks: "syncAll",
   };
   const values = (object) => Object.values(object || {});
   const composedParent = (element) =>
@@ -330,10 +333,41 @@
   };
   const signedClockOffset = (hass, entityId) => {
     const value = numericState(hass, entityId);
-    if (value === null) return "—";
-    return `${value > 0 ? "+" : ""}${Math.round(value)} s`;
+    return readableClockOffset(value);
   };
-  const repeaterClockBusy = (hass, repeater, fleetMetrics) => {
+  const readableClockOffset = (value) => {
+    if (value === null || value === undefined || !Number.isFinite(Number(value)))
+      return "—";
+    const rounded = Math.round(Number(value));
+    const sign = rounded > 0 ? "+" : rounded < 0 ? "−" : "";
+    const absolute = Math.abs(rounded);
+    if (absolute < 60) return `${sign}${absolute} s`;
+    if (absolute < 3600)
+      return `${sign}${Math.floor(absolute / 60)}m ${absolute % 60}s`;
+    return `${sign}${Math.floor(absolute / 3600)}h ${Math.floor(
+      (absolute % 3600) / 60,
+    )}m`;
+  };
+  const fleetSyncMetrics = (hass, fleet) => {
+    const state = stateValue(hass, fleet.syncState);
+    const attributes = state?.attributes || {};
+    return {
+      lifecycle: String(state?.state || "idle").toLowerCase(),
+      active: Boolean(attributes.fleet_sync_running),
+      currentRepeater: attributes.fleet_sync_current_repeater || "—",
+      completed: attributes.fleet_sync_completed_count ?? 0,
+      total: attributes.fleet_sync_total_count ?? 0,
+      result: attributes.last_fleet_sync_result || "—",
+      successful: attributes.last_fleet_sync_successful ?? 0,
+      alreadyAhead: attributes.last_fleet_sync_already_ahead ?? 0,
+      failed: attributes.last_fleet_sync_failed ?? 0,
+      automaticEnabled: attributes.automatic_sync_enabled ?? false,
+      interval: attributes.automatic_sync_interval ?? 24,
+      nextAutomaticSync: attributes.next_automatic_sync || null,
+      perRepeater: attributes.last_summary?.per_repeater || [],
+    };
+  };
+  const repeaterClockBusy = (hass, repeater, fleetMetrics, syncMetrics = {}) => {
     const requestState = String(
       stateValue(hass, repeater.entities.clockStatus)?.attributes
         ?.request_state || "",
@@ -347,16 +381,19 @@
       fleetMetrics.active &&
       (fleetMetrics.currentStableId === repeater.stableId ||
         fleetMetrics.queuedStableIds.includes(repeater.stableId));
-    return individuallyActive || reservedByFleet;
+    return individuallyActive || reservedByFleet || Boolean(syncMetrics.active);
   };
   const actionRequestMessage = (kind, targetName) =>
     kind === "fleet"
       ? "Fleet clock check started"
+      : kind === "fleet-sync"
+        ? "Fleet clock synchronisation started"
       : kind === "cancel"
         ? "Cancel requested"
         : `Clock check requested for ${targetName || "managed repeater"}`;
-  const fleetControlState = (metrics) => ({
-    checkAllDisabled: metrics.active,
+  const fleetControlState = (metrics, syncMetrics = {}) => ({
+    checkAllDisabled: metrics.active || Boolean(syncMetrics.active),
+    syncAllDisabled: metrics.active || Boolean(syncMetrics.active),
     cancelDisabled: !metrics.active,
   });
   const clockCompletionMessage = (outcome, targetName) => {
@@ -851,17 +888,25 @@ h1,h2,p{margin:0}
         this._render("clock-action-feedback-cleared");
       }, 4500);
     }
-    _fleetClockSection(fleet) {
+    _fleetClockSection(fleet, repeaters) {
       const metrics = fleetClockMetrics(this._hass, fleet);
-      const controls = fleetControlState(metrics);
+      const sync = fleetSyncMetrics(this._hass, fleet);
+      const controls = fleetControlState(metrics, sync);
       const section = this._element("section", "clock-panel");
-      section.setAttribute("aria-label", "Clock Intelligence");
+      section.setAttribute("aria-label", "Clock Management");
       const heading = this._element("div", "clock-strip-title");
       heading.append(
         this._icon("mdi:clock-check-outline"),
-        document.createTextNode("Clock Intelligence"),
+        document.createTextNode("Clock Management"),
       );
       section.append(heading);
+      const warning = this._element(
+        "div",
+        "clock-health warning",
+        "Repeaters are synchronised to the connected MeshCore companion clock. Ensure the companion clock is correct before enabling automatic synchronisation.",
+      );
+      warning.style.gridColumn = "1 / -1";
+      section.append(warning);
       const cells = [
         ["Clock State", this._value(fleet.state, "Idle")],
         ["Progress", this._value(fleet.progress, "0/0")],
@@ -895,6 +940,19 @@ h1,h2,p{margin:0}
           "Last Fleet Check",
           formatDateTime(stateValue(this._hass, fleet.lastCheck)?.state),
         ],
+        [
+          "Last Fleet Sync",
+          formatDateTime(stateValue(this._hass, fleet.lastSync)?.state),
+        ],
+        ["Fleet Sync State", sync.lifecycle],
+        ["Sync Progress", `${sync.completed} of ${sync.total} repeaters completed`],
+        ["Sync Current", sync.currentRepeater],
+        ["Sync Successful", sync.successful],
+        ["Already Ahead", sync.alreadyAhead],
+        ["Sync Failed", sync.failed],
+        ["Next Automatic Sync", formatDateTime(sync.nextAutomaticSync)],
+        ["Automatic Sync", sync.automaticEnabled ? "Enabled" : "Disabled"],
+        ["Sync Interval", `${sync.interval} hours`],
         ["Next Scheduled", formatDateTime(metrics.nextScheduledRun)],
         ["Automatic", metrics.automaticEnabled ? "Enabled" : "Disabled"],
       ];
@@ -909,6 +967,12 @@ h1,h2,p{margin:0}
           disabled: controls.checkAllDisabled,
           kind: "fleet",
           pendingLabel: "Starting…",
+          primary: true,
+        }),
+        this._actionButton("Synchronise All Clocks", fleet.syncAll, {
+          disabled: controls.syncAllDisabled,
+          kind: "fleet-sync",
+          pendingLabel: "Synchronising…",
           primary: true,
         }),
         this._actionButton("Cancel Check", fleet.cancel, {
@@ -975,6 +1039,46 @@ h1,h2,p{margin:0}
         failures.append(list);
         section.append(failures);
       }
+      const results = this._element("div", "clock-health");
+      results.style.gridColumn = "1 / -1";
+      results.append(this._element("b", "", "Managed repeater clock results"));
+      for (const repeater of repeaters) {
+        const clock = stateValue(this._hass, repeater.entities.clockStatus);
+        const attributes = clock?.attributes || {};
+        const syncResult = sync.perRepeater.find(
+          (item) => item.stable_id === repeater.stableId,
+        );
+        const result = syncResult?.result || attributes.last_sync_result || "never";
+        const detail =
+          syncResult?.remote_response ||
+          syncResult?.error ||
+          attributes.last_sync_response ||
+          attributes.last_sync_error ||
+          "No sync result";
+        const row = this._element(
+          "div",
+          `clock-result-row ${String(result).toLowerCase()}`,
+          `${repeater.name} · ${signedClockOffset(
+            this._hass,
+            repeater.entities.clockOffset,
+          )} · check ${attributes.last_clock_attempt_outcome || "never"} · sync ${result} · ${formatDateTime(
+            attributes.last_sync_time,
+          )} · ${detail}`,
+        );
+        row.prepend(
+          this._icon(
+            ["success", "already_ahead"].includes(String(result))
+              ? "mdi:check-circle"
+              : ["failed", "timeout", "unauthorized"].includes(String(result))
+                ? "mdi:alert-circle"
+                : String(result) === "running"
+                  ? "mdi:progress-clock"
+                  : "mdi:clock-outline",
+          ),
+        );
+        results.append(row);
+      }
+      section.append(results);
       return section;
     }
     _repeaterCard(repeater, fleetMetrics) {
@@ -1341,7 +1445,7 @@ h1,h2,p{margin:0}
       }
       renderShell.append(summary);
       if (Object.keys(fleetClock).length)
-        renderShell.append(this._fleetClockSection(fleetClock));
+        renderShell.append(this._fleetClockSection(fleetClock, repeaters));
       if (this._actionMessage)
         renderShell.append(
           this._element(
@@ -1464,6 +1568,7 @@ h1,h2,p{margin:0}
       discoverFleetClock,
       discoverRepeaters,
       fleetClockMetrics,
+      fleetSyncMetrics,
       fleetControlState,
       generateDashboard,
       installedVersionFromState,
@@ -1481,5 +1586,6 @@ h1,h2,p{margin:0}
       scrollContainerFor,
       scrollSnapshotForRender,
       signedClockOffset,
+      readableClockOffset,
     };
 })();

@@ -25,6 +25,7 @@ from .clock import (
 from .coordinator import MeshCoreNocCoordinator
 from .entity import MeshCoreNocEntity, MeshCoreNocFleetEntity
 from .fleet_clock import FleetClockOrchestrator, FleetClockState
+from .fleet_sync import FleetClockSyncOrchestrator, FleetClockSyncState
 
 
 async def async_setup_entry(
@@ -57,6 +58,7 @@ async def async_setup_entry(
                 )
             )
     orchestrator = entry.runtime_data.fleet_clock_orchestrator
+    sync_orchestrator = entry.runtime_data.fleet_clock_sync_orchestrator
     entities.extend(
         (
             MeshCoreNocClockCheckProgressSensor(orchestrator),
@@ -65,6 +67,8 @@ async def async_setup_entry(
             MeshCoreNocFleetClockHealthSensor(
                 orchestrator, entry.runtime_data.clock_manager
             ),
+            MeshCoreNocFleetClockSyncStateSensor(sync_orchestrator),
+            MeshCoreNocLastFleetClockSyncSensor(sync_orchestrator),
         )
     )
     async_add_entities(entities)
@@ -405,3 +409,61 @@ class MeshCoreNocFleetClockHealthSensor(_MeshCoreNocFleetClockSensor):
             **super().extra_state_attributes,
             **self.clock_manager.fleet_health,
         }
+
+
+class _MeshCoreNocFleetClockSyncSensor(MeshCoreNocFleetEntity, SensorEntity):
+    """Shared fleet synchronization state and retained attributes."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def sync_orchestrator(self) -> FleetClockSyncOrchestrator:
+        """Return the typed synchronization orchestrator."""
+        return self.orchestrator
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        """Expose the complete fleet synchronization contract."""
+        return self.sync_orchestrator.state_attributes
+
+
+class MeshCoreNocFleetClockSyncStateSensor(_MeshCoreNocFleetClockSyncSensor):
+    """Current or last fleet clock synchronization state."""
+
+    _attr_translation_key = "fleet_clock_sync_state"
+    _attr_icon = "mdi:clock-sync"
+
+    def __init__(self, orchestrator: FleetClockSyncOrchestrator) -> None:
+        super().__init__(orchestrator, "fleet_clock_sync_state")
+        self.entity_id = "sensor.fleet_clock_sync_state"
+
+    @property
+    def native_value(self) -> str:
+        """Return a compact human-readable lifecycle state."""
+        run = self.sync_orchestrator.current_run
+        state = (
+            run["state"]
+            if run
+            else (self.sync_orchestrator.last_summary or {}).get(
+                "state", FleetClockSyncState.IDLE
+            )
+        )
+        return str(state).replace("_", " ").title()
+
+
+class MeshCoreNocLastFleetClockSyncSensor(_MeshCoreNocFleetClockSyncSensor):
+    """Completion timestamp of the latest fleet synchronization."""
+
+    _attr_translation_key = "last_fleet_clock_sync"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:clock-check"
+
+    def __init__(self, orchestrator: FleetClockSyncOrchestrator) -> None:
+        super().__init__(orchestrator, "last_fleet_clock_sync")
+        self.entity_id = "sensor.last_fleet_clock_sync"
+
+    @property
+    def native_value(self):
+        """Return the retained terminal completion time."""
+        summary = self.sync_orchestrator.last_summary
+        return summary.get("completed_at") if summary else None

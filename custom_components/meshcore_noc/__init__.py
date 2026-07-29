@@ -23,16 +23,21 @@ from .clock import (
 from .const import (
     ALPHA2_DEVICE_SLUG,
     CONF_AUTO_FLEET_CLOCK_CHECKS,
+    CONF_AUTO_FLEET_CLOCK_SYNC,
     CONF_CLOCK_CHECK_COOLDOWN,
     CONF_FLEET_CLOCK_INTERVAL_HOURS,
+    CONF_FLEET_CLOCK_SYNC_INTERVAL_HOURS,
     CONF_FLEET_FAILURE_DELAY,
     CONF_FLEET_ROTATING_START,
     CONF_FLEET_SUCCESS_DELAY,
     CONF_MANAGED_REPEATER_IDS,
     CONF_UPDATE_CHANNEL,
     DEFAULT_AUTO_FLEET_CLOCK_CHECKS,
+    DEFAULT_AUTO_FLEET_CLOCK_SYNC,
     DEFAULT_CLOCK_CHECK_COOLDOWN,
     DEFAULT_FLEET_CLOCK_INTERVAL_HOURS,
+    DEFAULT_FLEET_CLOCK_SYNC_DELAY,
+    DEFAULT_FLEET_CLOCK_SYNC_INTERVAL_HOURS,
     DEFAULT_FLEET_FAILURE_DELAY,
     DEFAULT_FLEET_ROTATING_START,
     DEFAULT_FLEET_SUCCESS_DELAY,
@@ -44,12 +49,18 @@ from .const import (
     SERVICE_CANCEL_CLOCK_CHECK,
     SERVICE_CHECK_ALL_CLOCKS,
     SERVICE_CHECK_CLOCK,
+    SERVICE_SYNC_ALL_REPEATER_CLOCKS,
     SERVICE_SYNC_REPEATER_CLOCK,
 )
 from .coordinator import MeshCoreNocCoordinator
 from .dashboard import DashboardSetupResult, async_setup_dashboard
 from .discovery import async_discover_repeaters
 from .fleet_clock import FleetClockConfig, FleetClockOrchestrator, FleetClockTrigger
+from .fleet_sync import (
+    FleetClockSyncConfig,
+    FleetClockSyncOrchestrator,
+    FleetClockSyncTrigger,
+)
 from .models import DeviceType, DiscoveryResult
 from .updater import MeshCoreNocUpdateCoordinator
 
@@ -104,6 +115,7 @@ class MeshCoreNocRuntimeData:
     dashboard: DashboardSetupResult
     clock_manager: MeshCoreNocClockManager
     fleet_clock_orchestrator: FleetClockOrchestrator
+    fleet_clock_sync_orchestrator: FleetClockSyncOrchestrator
 
     @property
     def coordinator(self) -> MeshCoreNocCoordinator | None:
@@ -211,6 +223,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: MeshCoreNocConfigEntry) 
             ),
         ),
     )
+    fleet_clock_sync_orchestrator = FleetClockSyncOrchestrator(
+        hass,
+        clock_manager,
+        FleetClockSyncConfig(
+            automatic_enabled=bool(
+                entry.options.get(
+                    CONF_AUTO_FLEET_CLOCK_SYNC,
+                    DEFAULT_AUTO_FLEET_CLOCK_SYNC,
+                )
+            ),
+            interval_hours=int(
+                entry.options.get(
+                    CONF_FLEET_CLOCK_SYNC_INTERVAL_HOURS,
+                    DEFAULT_FLEET_CLOCK_SYNC_INTERVAL_HOURS,
+                )
+            ),
+            inter_repeater_delay_seconds=DEFAULT_FLEET_CLOCK_SYNC_DELAY,
+        ),
+        storage_key=f"{DOMAIN}.fleet_clock_sync.{entry.entry_id}",
+    )
+    await fleet_clock_sync_orchestrator.async_initialize()
     entry.runtime_data = MeshCoreNocRuntimeData(
         discovery,
         tuple(coordinators),
@@ -219,16 +252,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: MeshCoreNocConfigEntry) 
         dashboard,
         clock_manager,
         fleet_clock_orchestrator,
+        fleet_clock_sync_orchestrator,
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     clock_manager.async_start()
     fleet_clock_orchestrator.async_start_scheduler()
-    _async_register_clock_services(hass, clock_manager, fleet_clock_orchestrator)
+    fleet_clock_sync_orchestrator.async_start_scheduler()
+    _async_register_clock_services(
+        hass,
+        clock_manager,
+        fleet_clock_orchestrator,
+        fleet_clock_sync_orchestrator,
+    )
     entry.async_on_unload(clock_manager.async_stop)
     entry.async_on_unload(fleet_clock_orchestrator.async_stop)
+    entry.async_on_unload(fleet_clock_sync_orchestrator.async_stop)
     for service_name in (
         SERVICE_CHECK_CLOCK,
         SERVICE_SYNC_REPEATER_CLOCK,
+        SERVICE_SYNC_ALL_REPEATER_CLOCKS,
         SERVICE_CHECK_ALL_CLOCKS,
         SERVICE_CANCEL_CLOCK_CHECK,
     ):
@@ -424,6 +466,7 @@ def _async_register_clock_services(
     hass: HomeAssistant,
     manager: MeshCoreNocClockManager,
     fleet: FleetClockOrchestrator,
+    fleet_sync: FleetClockSyncOrchestrator,
 ) -> None:
     """Register single-target and fleet clock services."""
 
@@ -437,6 +480,11 @@ def _async_register_clock_services(
 
     async def async_check_all_clocks(_call: ServiceCall) -> dict[str, object]:
         return fleet.async_start_run(FleetClockTrigger.MANUAL)
+
+    async def async_sync_all_repeater_clocks(
+        _call: ServiceCall,
+    ) -> dict[str, object]:
+        return await fleet_sync.async_sync_all(FleetClockSyncTrigger.MANUAL)
 
     async def async_cancel_clock_check(_call: ServiceCall) -> dict[str, object]:
         return fleet.async_cancel_run()
@@ -459,6 +507,13 @@ def _async_register_clock_services(
         DOMAIN,
         SERVICE_CHECK_ALL_CLOCKS,
         async_check_all_clocks,
+        schema=vol.Schema({}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SYNC_ALL_REPEATER_CLOCKS,
+        async_sync_all_repeater_clocks,
         schema=vol.Schema({}),
         supports_response=SupportsResponse.ONLY,
     )
@@ -513,6 +568,19 @@ def _async_register_clock_services(
             "description": (
                 "Start one serialized clock check for every managed, "
                 "addressable repeater."
+            ),
+            "fields": {},
+        },
+    )
+    service_helper.async_set_service_schema(
+        hass,
+        DOMAIN,
+        SERVICE_SYNC_ALL_REPEATER_CLOCKS,
+        {
+            "name": "Synchronize all repeater clocks",
+            "description": (
+                "Sequentially synchronize every currently managed, active, "
+                "addressable repeater to the connected MeshCore companion clock."
             ),
             "fields": {},
         },

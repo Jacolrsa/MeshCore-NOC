@@ -5,6 +5,19 @@ All notable changes to MeshCore NOC will be documented in this file.
 The format is based on Keep a Changelog, and versioning follows Semantic
 Versioning.
 
+## [1.1.0-beta3]
+
+### Added
+
+- Central fleet Clock Management with sequential all-repeater clock checks and
+  synchronisation, structured per-repeater results, progress, and safe
+  cross-operation concurrency protection.
+- Optional integration-managed automatic fleet clock synchronisation at 6, 12,
+  24, 72, or 168 hour intervals, disabled by default, with persisted schedule
+  and last-run state.
+- Dashboard fleet sync controls, companion-clock safety warning, readable
+  offsets, and compact managed-repeater results.
+
 ## [1.1.0-beta2]
 
 ### Added

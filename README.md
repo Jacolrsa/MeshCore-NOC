@@ -236,6 +236,19 @@ point. The first scheduled run occurs only after the full configured interval.
 Fleet history is limited to the latest 20 in-memory runs and is reset by a
 restart.
 
+Fleet Clock Management also provides central **Synchronise All Clocks**
+control. It processes the current managed, addressable repeater set
+sequentially with a two-second network-pacing delay, continues after individual
+failures, and reports a structured result for every repeater.
+
+Automatic fleet synchronisation is configured in the integration options. It
+is disabled by default and supports 6, 12, 24, 72, or 168 hour intervals. An
+overdue schedule runs once after Home Assistant starts; missed intervals are
+not replayed.
+
+> Repeaters are synchronised to the connected MeshCore companion clock. Ensure
+> the companion clock is correct before enabling automatic synchronisation.
+
 Every addressable managed repeater also has a **Check Clock** button on its
 Home Assistant device. The Mission Control dashboard uses those button entities
 and the fleet buttons; it does not issue MeshCore commands itself.

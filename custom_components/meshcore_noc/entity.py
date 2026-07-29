@@ -10,6 +10,7 @@ from homeassistant.util import slugify
 from .const import ALPHA2_DEVICE_SLUG, DOMAIN
 from .coordinator import MeshCoreNocCoordinator
 from .fleet_clock import FleetClockOrchestrator
+from .fleet_sync import FleetClockSyncOrchestrator
 from .naming import managed_device_name
 
 
@@ -57,7 +58,11 @@ class MeshCoreNocFleetEntity(Entity):
 
     _attr_has_entity_name = True
 
-    def __init__(self, orchestrator: FleetClockOrchestrator, suffix: str) -> None:
+    def __init__(
+        self,
+        orchestrator: FleetClockOrchestrator | FleetClockSyncOrchestrator,
+        suffix: str,
+    ) -> None:
         """Attach one stable fleet entity to the NOC service device."""
         self.orchestrator = orchestrator
         self._attr_unique_id = f"noc_{suffix}"

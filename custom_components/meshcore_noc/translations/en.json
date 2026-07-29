@@ -20,6 +20,11 @@
         }
       }
     },
+    "sync_all_repeater_clocks": {
+      "name": "Synchronize all repeater clocks",
+      "description": "Sequentially synchronize every managed, active, addressable repeater to the connected MeshCore companion clock.",
+      "fields": {}
+    },
     "check_all_clocks": {
       "name": "Check all clocks",
       "description": "Start one serialized clock check for every managed, addressable repeater.",
@@ -52,6 +57,8 @@
           "fleet_success_delay": "Delay after a successful check",
           "fleet_failure_delay": "Delay after a failed or timed-out check",
           "fleet_rotating_start": "Rotate the first repeater",
+          "auto_fleet_clock_sync": "Enable automatic clock synchronisation",
+          "fleet_clock_sync_interval_hours": "Clock synchronisation interval",
           "update_channel": "Update channel"
         },
         "data_description": {
@@ -61,6 +68,8 @@
           "fleet_success_delay": "Seconds to wait after a successful repeater check before dispatching the next.",
           "fleet_failure_delay": "Seconds to wait after a failed or timed-out check before continuing.",
           "fleet_rotating_start": "Start each completed fleet run at the next repeater while preserving managed order.",
+          "auto_fleet_clock_sync": "Disabled by default. Repeaters use the connected MeshCore companion clock as their time source.",
+          "fleet_clock_sync_interval_hours": "Choose 6 hours, 12 hours, 24 hours, 3 days, or 7 days.",
           "update_channel": "Stable is recommended and receives published production releases. Development receives testing builds from v4-development and may contain unfinished changes."
         },
         "description": "Select repeaters and clients to add to NOC. Device types and names are presentation only; stable MeshCore identifiers are stored.",
@@ -95,6 +104,12 @@
         "fleet_clock_health": {
           "name": "Fleet Clock Health"
         },
+        "fleet_clock_sync_state": {
+          "name": "Fleet Clock Sync State"
+        },
+        "last_fleet_clock_sync": {
+          "name": "Last Fleet Clock Sync"
+        },
       "calibrated_battery": {
         "name": "Calibrated Battery"
       },
@@ -118,6 +133,9 @@
         "check_all_clocks": {
         "name": "Check All Clocks"
       },
+      "sync_all_repeater_clocks": {
+        "name": "Synchronize All Clocks"
+      },
       "cancel_clock_check": {
         "name": "Cancel Clock Check"
       }
@@ -140,6 +158,8 @@
           "fleet_success_delay": "Delay after a successful check",
           "fleet_failure_delay": "Delay after a failed or timed-out check",
           "fleet_rotating_start": "Rotate the first repeater",
+          "auto_fleet_clock_sync": "Enable automatic clock synchronisation",
+          "fleet_clock_sync_interval_hours": "Clock synchronisation interval",
           "update_channel": "Update channel"
         },
         "data_description": {
@@ -149,6 +169,8 @@
           "fleet_success_delay": "Seconds to wait after a successful repeater check before dispatching the next.",
           "fleet_failure_delay": "Seconds to wait after a failed or timed-out check before continuing.",
           "fleet_rotating_start": "Start each completed fleet run at the next repeater while preserving managed order.",
+          "auto_fleet_clock_sync": "Disabled by default. Repeaters use the connected MeshCore companion clock as their time source.",
+          "fleet_clock_sync_interval_hours": "Choose 6 hours, 12 hours, 24 hours, 3 days, or 7 days.",
           "update_channel": "Stable is recommended and receives published production releases. Development receives testing builds from v4-development and may contain unfinished changes."
         },
         "description": "Selected repeaters and clients are managed by NOC. Unselected devices remain available from MeshCore.",
