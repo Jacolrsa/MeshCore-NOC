@@ -5,6 +5,26 @@ All notable changes to MeshCore NOC will be documented in this file.
 The format is based on Keep a Changelog, and versioning follows Semantic
 Versioning.
 
+## [1.1.0-beta4]
+
+### Changed
+
+- Reworked Mission Control into a compact Network Operations Centre layout
+  with combined status, alerts, and fleet clock controls.
+- Replaced oversized repeater cards with a concise, navigable fleet list and
+  dedicated per-repeater detail subviews.
+- Made the bundled recorder-backed fleet voltage chart the main visual focus,
+  with 24-hour, 7-day, and 30-day ranges and safe invalid-value filtering.
+- Consolidated monitoring, single-repeater clock actions, identity,
+  calibration values, configuration guidance, and diagnostics in each detail
+  view.
+
+### Preserved
+
+- Existing entity identities, service names and schemas, managed discovery,
+  clock execution, automatic scheduling, diagnostics, and unload/reload
+  behaviour.
+
 ## [1.1.0-beta3]
 
 ### Added

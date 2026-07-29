@@ -270,33 +270,24 @@ HACS frontend card is required.
 
 The primary Mission Control view contains:
 
-- Mission Control header with loaded version, overall state, network health,
-  telemetry age, and managed count;
-- exactly eight fleet KPIs, including a severity-aware fleet clock tile;
-- a compact Clock Intelligence fleet status/control strip;
-- an adaptive managed-device card grid;
-- calibrated voltage and battery 24-hour history; and
-- an active alert list derived in the frontend.
-
-Each repeater card shows textual and icon-based clock severity and retained
-offset. A collapsed clock detail section contains attempt metadata and the
-per-repeater **Check Clock** control, keeping the eight-repeater overview
-compact.
+- one compact status header combining network health, alerts, fleet clock
+  state, automatic-sync state, and fleet actions;
+- a concise, clickable fleet repeater list;
+- one large calibrated-voltage history chart with 24-hour, 7-day, and 30-day
+  ranges; and
+- one generated detail subview for every managed repeater.
 
 The dashboard is the normal Clock Intelligence control surface. **Check All
-Clocks** and **Cancel Check** operate the existing controller button entities;
-per-repeater controls operate their existing device button entities. Active
-runs show position, current repeater, waiting/next-check state, outcome totals,
-and cancellation. Completed runs retain duration and expandable failed/timeout
-names. Actions show short, automatically cleared dashboard feedback. Developer
-Tools, entity pages, diagnostics, and integration options remain administrative
-surfaces rather than requirements for routine operation.
+Clocks** and **Sync All Clocks** operate the existing controller entities.
+Active runs show progress and the current repeater without creating a separate
+large Clock Management card. Each repeater detail view retains the existing
+single-repeater check action and invokes the existing authenticated
+`meshcore_noc.sync_repeater_clock` service.
 
-The seven-day battery trend and current battery comparison are preserved in a
-secondary **Trends** view so supporting analysis does not push the primary
-operations view below the target viewport. The responsive engine uses actual
-content width, fleet size, and viewport height to select 1–5 grid columns and
-wide, compact, or constrained density.
+Detail views consolidate monitoring, clock status/results, source identity,
+calibration values and advanced diagnostics. Settings without an existing
+persistent integration model are shown as read-only or explicitly deferred;
+the dashboard never presents non-persistent controls as editable settings.
 
 Recorder is required only for historical graphs. If another dashboard already
 uses the `meshcore-noc` path, the integration preserves it and posts a

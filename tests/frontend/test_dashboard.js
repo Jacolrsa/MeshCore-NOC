@@ -400,22 +400,23 @@ const clockDashboardSource = fs.readFileSync(
 );
 assert.equal(clockDashboardSource.includes("send_cmd"), false);
 assert.equal(clockDashboardSource.includes("meshcore.execute_command"), false);
-assert(clockDashboardSource.includes("Check All Clocks"));
-assert(clockDashboardSource.includes("Synchronise All Clocks"));
+assert(clockDashboardSource.includes("Check All"));
+assert(clockDashboardSource.includes("Sync All"));
 assert(clockDashboardSource.includes("Synchronising…"));
-assert(clockDashboardSource.includes("Clock Management"));
+assert(clockDashboardSource.includes("ops-layout"));
+assert(clockDashboardSource.includes("fleet-row"));
+assert(clockDashboardSource.includes("meshcore-noc-history-chart"));
 assert(
   clockDashboardSource.includes(
     "Repeaters are synchronised to the connected MeshCore companion clock",
   ),
 );
-assert(clockDashboardSource.includes("clock-result-row"));
 assert(clockDashboardSource.includes("Cancel Check"));
 assert(clockDashboardSource.includes("action-feedback"));
 assert(clockDashboardSource.includes("Action failed:"));
 assert(clockDashboardSource.includes("Working…"));
-assert(clockDashboardSource.includes("Clock details"));
-assert(clockDashboardSource.includes("grid.append(this._repeaterCard"));
+assert(clockDashboardSource.includes("Advanced diagnostics"));
+assert(clockDashboardSource.includes("Sync this repeater"));
 const longNamed = structuredClone(hass);
 longNamed.devices.managed.name =
   "Myburgh Park Solar Repeater With A Deliberately Long Operations Display Name";
@@ -427,26 +428,21 @@ assert.equal(
 const config = dashboard.generateDashboard(hass);
 assert.equal(config.views.length, 2);
 assert.equal(config.views[0].panel, true);
-assert.equal(config.views[0].cards[0].type, "vertical-stack");
 assert.equal(
-  config.views[0].cards[0].cards[0].type,
+  config.views[0].cards[0].type,
   "custom:meshcore-noc-overview-card",
 );
-assert.equal(config.views[0].cards[0].cards[1].type, "horizontal-stack");
-assert.equal(config.views[0].cards[0].cards[1].cards.length, 2);
-assert.equal(config.views[0].cards[0].cards[1].cards[0].hours_to_show, 24);
-assert.equal(config.views[0].cards[0].cards[1].cards[1].hours_to_show, 24);
-assert.deepEqual(
-  config.views[0].cards[0].cards[1].cards[0].grid_options,
-  { columns: 12, rows: 4 },
+assert.equal(config.views[0].cards[0].section, "operations");
+assert.equal(config.views[1].title, "<img src=x onerror=alert(1)>");
+assert.equal(config.views[1].path, dashboard.safePath("node/one"));
+assert.equal(config.views[1].subview, true);
+assert.equal(config.views[1].panel, true);
+assert.equal(
+  config.views[1].cards[0].type,
+  "custom:meshcore-noc-overview-card",
 );
-assert.deepEqual(
-  config.views[0].cards[0].cards[1].cards[1].grid_options,
-  { columns: 12, rows: 4 },
-);
-assert.equal(config.views[1].title, "Trends");
-assert.equal(config.views[1].cards[0].hours_to_show, 168);
-assert.equal(config.views[1].cards[1].title, "Current battery comparison");
+assert.equal(config.views[1].cards[0].section, "detail");
+assert.equal(config.views[1].cards[0].stable_id, "node/one");
 assert.equal(
   dashboard.generateDashboard({ devices: {}, entities: {}, states: {} }).views
     .length,
@@ -461,6 +457,23 @@ assert.equal(metrics.averageBattery, 72);
 assert.equal(metrics.lowestBattery, 72);
 assert.equal(metrics.lowestBatteryRepeater.name, hass.devices.managed.name);
 assert.equal(metrics.health, 94);
+assert.equal(dashboard.shortDisplayName("MeshCore Repeater: Laguna2 (034bdb)"), "Laguna2");
+assert.equal(dashboard.shortDisplayName("ProMicro Repeater"), "ProMicro");
+assert.equal(dashboard.networkAlerts(hass, metrics).length, 1);
+assert.equal(
+  dashboard.networkAlerts(hass, metrics)[0].text,
+  "<img src=x onerror=alert(1)> Clock Critical",
+);
+const offlineAlertHass = structuredClone(hass);
+offlineAlertHass.states["binary_sensor.managed_fresh"] = {
+  state: "off",
+  attributes: { freshness_status: "offline" },
+};
+const offlineMetrics = dashboard.networkMetrics(offlineAlertHass, repeaters);
+assert.deepEqual(
+  dashboard.networkAlerts(offlineAlertHass, offlineMetrics).map(({ text }) => text),
+  ["<img src=x onerror=alert(1)> Offline"],
+);
 assert.equal(dashboard.overallState(94), "healthy");
 assert.equal(dashboard.overallState(80), "warning");
 assert.equal(dashboard.overallState(60), "degraded");
@@ -858,6 +871,7 @@ const registry = {
 dashboard.registerStrategy(target, registry);
 dashboard.registerStrategy(target, registry);
 assert(definitions.has("ll-strategy-dashboard-meshcore-noc"));
+assert(definitions.has("meshcore-noc-history-chart"));
 assert.equal(target.customStrategies.length, 1);
 assert.equal(target.customStrategies[0].strategyType, "dashboard");
 assert.equal(target.customStrategies[0].type, "meshcore-noc");
@@ -905,6 +919,16 @@ changed.entities.secondHealth = {
   unique_id: "managed_repeater_node-two_health",
 };
 assert.equal(dashboard.discoverRepeaters(changed).length, 2);
+const changedDashboard = dashboard.generateDashboard(changed);
+assert.equal(changedDashboard.views.length, 3);
+assert.equal(
+  new Set(changedDashboard.views.map(({ path }) => path)).size,
+  changedDashboard.views.length,
+);
+assert.deepEqual(
+  changedDashboard.views.slice(1).map((view) => view.cards[0].stable_id).sort(),
+  ["node-two", "node/one"],
+);
 delete changed.devices.managed;
 assert.deepEqual(
   dashboard.discoverRepeaters(changed).map((item) => item.stableId),
