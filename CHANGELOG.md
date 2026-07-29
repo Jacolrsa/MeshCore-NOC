@@ -5,7 +5,7 @@ All notable changes to MeshCore NOC will be documented in this file.
 The format is based on Keep a Changelog, and versioning follows Semantic
 Versioning.
 
-## [1.1.0-dev]
+## [1.1.0-beta1]
 
 ### Added
 

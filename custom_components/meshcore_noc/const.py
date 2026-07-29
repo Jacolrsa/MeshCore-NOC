@@ -8,7 +8,7 @@ DOMAIN: Final = "meshcore_noc"
 MESHCORE_DOMAIN: Final = "meshcore"
 MESHCORE_RAW_EVENT: Final = "meshcore_raw_event"
 INTEGRATION_NAME: Final = "MeshCore NOC"
-INTEGRATION_VERSION: Final = "1.1.0-dev"
+INTEGRATION_VERSION: Final = "1.1.0-beta1"
 
 PLATFORMS: Final = (
     Platform.SENSOR,
