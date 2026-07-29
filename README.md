@@ -418,7 +418,6 @@ Assistant users:
 
 ## Licence and acknowledgements
 
-No standalone project `LICENSE` file is present in the repository. Do not
-assume redistribution terms beyond those of referenced upstream projects.
-MeshCore is an independent upstream project. Home Assistant is a project of the
-Open Home Foundation. Compatibility references do not imply endorsement.
+MeshCore NOC is licensed under the MIT License. See the root
+[`LICENSE`](LICENSE) file for the full terms. Referenced upstream projects
+remain subject to their own licences.
