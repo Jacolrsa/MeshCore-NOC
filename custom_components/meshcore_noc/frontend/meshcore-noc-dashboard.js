@@ -9,6 +9,21 @@
   const DOMAIN = "meshcore_noc";
   const STRATEGY_PICKER_TYPE = "meshcore-noc";
   const STRATEGY = "custom:meshcore-noc";
+  const MANAGEMENT_DEFAULTS = Object.freeze({
+    voltage_offset: -0.816,
+    empty_voltage: 3.0,
+    full_voltage: 4.2,
+    battery_warning: 40,
+    battery_critical: 20,
+    fresh_max_age: 4500,
+    aging_max_age: 7200,
+    stale_max_age: 10800,
+    offline_max_age: 10800,
+    clock_warning: 120,
+    clock_critical: 300,
+    display_name: null,
+    password_configured: false,
+  });
   const HTMLElementBase = globalThis.HTMLElement || class {};
   const ROLES = {
     calibrated_voltage: "voltage",
@@ -232,6 +247,25 @@
     state && !["unknown", "unavailable"].includes(state.state)
       ? state.state.toLowerCase()
       : "unknown";
+  const operationClass = (value) => {
+    const state = String(value || "").toLowerCase();
+    if (state.includes("fail") || state.includes("timeout"))
+      return "operation-failed";
+    if (
+      state.includes("running") ||
+      state.includes("checking") ||
+      state.includes("sync") ||
+      state.includes("queued")
+    )
+      return "operation-running";
+    if (
+      state.includes("complete") ||
+      state.includes("success") ||
+      state === "idle"
+    )
+      return "operation-completed";
+    return "value-unknown";
+  };
   const clockStatusPresentation = (state) => {
     const normalizedState = String(state || "Unknown").toLowerCase();
     return (
@@ -805,27 +839,46 @@ h2{margin:0;font-size:1rem}.subtitle{margin-top:3px;color:#aab5bf;font-size:.72r
       );
       const points = series.map((item) => ({
         ...item,
-        values: (byEntity.get(item.entity) || [])
-          .map((state) => {
+        values: (() => {
+          let gapBefore = false;
+          const result = [];
+          for (const state of byEntity.get(item.entity) || []) {
             const rawTime =
               state.last_changed || state.last_updated || state.lu;
             const numericTime = Number(rawTime);
-            return {
+            const rawValue = state.state ?? state.s;
+            const value =
+              rawValue === null ||
+              rawValue === undefined ||
+              rawValue === "" ||
+              ["unknown", "unavailable"].includes(
+                String(rawValue).toLowerCase(),
+              )
+                ? Number.NaN
+                : Number(rawValue);
+            const point = {
               time: Number.isFinite(numericTime)
                 ? numericTime < 1_000_000_000_000
                   ? numericTime * 1000
                   : numericTime
                 : new Date(rawTime).getTime(),
-              value: Number(state.state ?? state.s),
+              value,
+              gapBefore,
             };
-          })
-          .filter(
-            ({ time, value }) =>
-              Number.isFinite(time) &&
+            if (
+              Number.isFinite(point.time) &&
               Number.isFinite(value) &&
               value >= 0 &&
-              value <= 10,
-          ),
+              value <= 10
+            ) {
+              result.push(point);
+              gapBefore = false;
+            } else {
+              gapBefore = true;
+            }
+          }
+          return result;
+        })(),
       }));
       const all = points.flatMap((item) => item.values);
       if (!all.length) {
@@ -895,7 +948,7 @@ h2{margin:0;font-size:1rem}.subtitle{margin-top:3px;color:#aab5bf;font-size:.72r
           item.values
             .map(
               (point, pointIndex) =>
-                `${pointIndex ? "L" : "M"}${x(point.time).toFixed(1)},${y(
+                `${pointIndex && !point.gapBefore ? "L" : "M"}${x(point.time).toFixed(1)},${y(
                   point.value,
                 ).toFixed(1)}`,
             )
@@ -961,6 +1014,10 @@ h2{margin:0;font-size:1rem}.subtitle{margin-top:3px;color:#aab5bf;font-size:.72r
   class MeshCoreNocOverviewCard extends HTMLElementBase {
     setConfig(config) {
       this._config = config || {};
+      this._managementSettings = this._managementSettings || new Map();
+      this._managementDrafts = this._managementDrafts || new Map();
+      this._managementLoads = this._managementLoads || new Set();
+      this._managementMessages = this._managementMessages || new Map();
       if (!this.shadowRoot) {
         this.attachShadow({ mode: "open" });
         this.shadowRoot.innerHTML = `<style>
@@ -1040,6 +1097,7 @@ h1,h2,p{margin:0}
 .ops-layout{display:grid;grid-template-columns:minmax(230px,28%) minmax(0,1fr);gap:8px;margin-top:8px}.fleet-list,.detail-panel{min-width:0;padding:9px;border:1px solid var(--noc-border);border-radius:var(--noc-radius);background:var(--noc-panel)}.fleet-list h2,.detail-panel h2{font-size:.88rem}
 .fleet-rows{display:grid;gap:4px;margin-top:7px}.fleet-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:7px;padding:7px 8px;border:1px solid transparent;border-left:4px solid currentColor;border-radius:8px;background:var(--noc-panel-alt);color:var(--noc-text-primary);text-decoration:none}.fleet-row:hover,.fleet-row:focus-visible{border-color:var(--noc-accent);outline:none}.fleet-row .status-dot{color:currentColor}.fleet-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:750}.fleet-value{color:var(--noc-text-secondary);font-size:.72rem;font-variant-numeric:tabular-nums}.fleet-state{grid-column:2/-1;color:var(--noc-text-secondary);font-size:.62rem}
 .detail-header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:11px 12px;border:1px solid var(--noc-border);border-left:5px solid currentColor;border-radius:var(--noc-radius);background:var(--noc-panel)}.detail-header h1{font-size:1.35rem}.detail-summary{margin-top:5px;color:var(--noc-text-secondary);font-size:.78rem}.back-link{color:var(--noc-accent);font-size:.72rem;text-decoration:none}.detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}.detail-panel{padding:11px}.detail-panel.wide{grid-column:1/-1}.detail-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px}.detail-metric{padding:7px;border-radius:8px;background:var(--noc-panel-alt);color:var(--noc-text-secondary);font-size:.67rem}.detail-metric b{display:block;margin-top:2px;overflow:hidden;color:var(--noc-text-primary);font-size:.84rem;text-overflow:ellipsis;white-space:nowrap}.detail-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.settings-note{margin-top:7px;padding:7px;border-left:3px solid var(--noc-warning);background:var(--noc-panel-alt);color:var(--noc-text-secondary);font-size:.7rem}.advanced{margin-top:8px}.advanced summary{cursor:pointer;font-size:.8rem;font-weight:750}.advanced .detail-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+.management-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}.management-form label{display:grid;gap:3px;color:var(--noc-text-secondary);font-size:.68rem}.management-form input{box-sizing:border-box;width:100%;padding:7px 8px;border:1px solid var(--noc-border);border-radius:7px;background:var(--noc-background);color:var(--noc-text-primary);font:inherit}.management-form input:focus{border-color:var(--noc-accent);outline:2px solid color-mix(in srgb,var(--noc-accent) 25%,transparent)}.management-preview{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.management-message{min-height:1em;margin-top:6px;color:var(--noc-text-secondary);font-size:.7rem}.management-message.error{color:var(--noc-critical)}.password-state{margin-top:8px;color:var(--noc-text-secondary);font-size:.76rem}.detail-navigation{display:flex;gap:10px;justify-content:flex-end;align-items:center}.value-healthy,.operation-completed{color:var(--noc-healthy)!important}.value-warning,.operation-running{color:var(--noc-warning)!important}.value-critical,.operation-failed{color:var(--noc-critical)!important}.value-info{color:var(--noc-accent)!important}.value-unknown{color:var(--noc-unknown)!important}
 .empty{padding:18px;text-align:center}
 .empty a{color:var(--noc-accent)}
 .shell[data-layout="compact"] .repeater{padding-block:4px}
@@ -1049,12 +1107,19 @@ h1,h2,p{margin:0}
 .shell[data-layout="constrained"] .kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
 .shell[data-layout="constrained"] .metric{height:62px}
 @container(max-width:800px){.noc-header{grid-template-columns:1fr}.header-controls{justify-content:flex-start}.header-progress{text-align:left}.ops-layout{grid-template-columns:1fr}.fleet-rows{grid-template-columns:repeat(2,minmax(0,1fr))}.detail-grid{grid-template-columns:1fr}.detail-panel.wide{grid-column:auto}}
-@container(max-width:700px){.mission{display:block}.network-state{display:inline-flex;margin-top:6px}.meta{flex-wrap:wrap;white-space:normal}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.alerts{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.clock-panel{grid-template-columns:repeat(2,minmax(0,1fr))}.clock-actions{justify-content:flex-start}.clock-detail-grid{grid-template-columns:1fr}.fleet-rows{grid-template-columns:1fr}.detail-header{grid-template-columns:1fr}.detail-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container(max-width:700px){.mission{display:block}.network-state{display:inline-flex;margin-top:6px}.meta{flex-wrap:wrap;white-space:normal}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.alerts{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.clock-panel{grid-template-columns:repeat(2,minmax(0,1fr))}.clock-actions{justify-content:flex-start}.clock-detail-grid{grid-template-columns:1fr}.fleet-rows{grid-template-columns:1fr}.detail-header{grid-template-columns:1fr}.detail-metrics,.management-preview{grid-template-columns:repeat(2,minmax(0,1fr))}.management-form{grid-template-columns:1fr}.detail-navigation{justify-content:flex-start}}
 @media(prefers-reduced-motion:reduce){.battery-fill{transition:none}}
 </style><section class="shell"></section>`;
         this.shadowRoot
           .querySelector(".shell")
-          ?.addEventListener("click", (event) => this._handleAction(event));
+          ?.addEventListener("click", (event) => {
+            if (event.target?.closest?.("[data-management-action]"))
+              this._handleManagementAction(event);
+            else this._handleAction(event);
+          });
+        this.shadowRoot
+          .querySelector(".shell")
+          ?.addEventListener("input", (event) => this._captureManagementDraft(event));
       }
       refreshOverviewCard(this, "config-initialization");
     }
@@ -1123,6 +1188,264 @@ h1,h2,p{margin:0}
       button.dataset.actionKind = options.kind || "service";
       if (options.targetName) button.dataset.targetName = options.targetName;
       return button;
+    }
+    _managementFor(stableId) {
+      const saved = this._managementSettings.get(stableId);
+      if (!saved) {
+        this._loadManagement(stableId);
+        return { ...MANAGEMENT_DEFAULTS };
+      }
+      return { ...MANAGEMENT_DEFAULTS, ...saved };
+    }
+    _draftFor(stableId) {
+      if (!this._managementDrafts.has(stableId))
+        this._managementDrafts.set(stableId, {
+          ...this._managementFor(stableId),
+        });
+      return this._managementDrafts.get(stableId);
+    }
+    async _loadManagement(stableId) {
+      if (
+        this._managementLoads.has(stableId) ||
+        this._managementSettings.has(stableId) ||
+        !this._hass?.callWS
+      )
+        return;
+      this._managementLoads.add(stableId);
+      try {
+        const settings = await this._hass.callWS({
+          type: "meshcore_noc/management/get",
+          stable_id: stableId,
+        });
+        this._managementSettings.set(stableId, {
+          ...MANAGEMENT_DEFAULTS,
+          ...settings,
+        });
+        if (!this._managementDrafts.has(stableId))
+          this._managementDrafts.set(stableId, {
+            ...MANAGEMENT_DEFAULTS,
+            ...settings,
+          });
+      } catch (error) {
+        this._managementSettings.set(stableId, { ...MANAGEMENT_DEFAULTS });
+        this._managementMessages.set(stableId, {
+          text: `Settings unavailable: ${error?.message || "request rejected"}`,
+          error: true,
+        });
+      } finally {
+        this._managementLoads.delete(stableId);
+        this._render("management-loaded");
+      }
+    }
+    _captureManagementDraft(event) {
+      const input = event.target?.closest?.("[data-management-field]");
+      if (!input) return;
+      const draft = this._draftFor(input.dataset.stableId);
+      draft[input.dataset.managementField] = input.value;
+      if (
+        ["voltage_offset", "empty_voltage", "full_voltage"].includes(
+          input.dataset.managementField,
+        )
+      )
+        this._updateCalibrationPreview(input.dataset.stableId);
+    }
+    _updateCalibrationPreview(stableId) {
+      const draft = this._draftFor(stableId);
+      const raw = Number(
+        this.shadowRoot?.querySelector(
+          `[data-preview-raw="${stableId}"]`,
+        )?.dataset.rawVoltage,
+      );
+      const offset = Number(draft.voltage_offset);
+      const empty = Number(draft.empty_voltage);
+      const full = Number(draft.full_voltage);
+      const calibrated = raw + offset;
+      const battery =
+        Number.isFinite(calibrated) && full > empty
+          ? Math.round(
+              Math.max(0, Math.min(100, ((calibrated - empty) / (full - empty)) * 100)),
+            )
+          : null;
+      const calibratedNode = this.shadowRoot?.querySelector(
+        `[data-preview-calibrated="${stableId}"]`,
+      );
+      const offsetNode = this.shadowRoot?.querySelector(
+        `[data-preview-offset="${stableId}"]`,
+      );
+      const batteryNode = this.shadowRoot?.querySelector(
+        `[data-preview-battery="${stableId}"]`,
+      );
+      if (calibratedNode)
+        calibratedNode.textContent = Number.isFinite(calibrated)
+          ? `${calibrated.toFixed(3)} V`
+          : "—";
+      if (offsetNode)
+        offsetNode.textContent = Number.isFinite(offset)
+          ? `${offset.toFixed(3)} V`
+          : "—";
+      if (batteryNode)
+        batteryNode.textContent = battery === null ? "—" : `${battery}%`;
+    }
+    async _handleManagementAction(event) {
+      const button = event.target?.closest?.("[data-management-action]");
+      if (!button || button.disabled) return;
+      const stableId = button.dataset.stableId;
+      const action = button.dataset.managementAction;
+      const section = button.dataset.section;
+      const saved = this._managementFor(stableId);
+      const draft = this._draftFor(stableId);
+      const sectionKeys = this._managementSectionKeys(section);
+      if (action === "cancel") {
+        for (const key of sectionKeys) draft[key] = saved[key];
+        this._managementMessages.delete(stableId);
+        this._render("management-cancelled");
+        return;
+      }
+      if (action === "reset") {
+        for (const key of sectionKeys) draft[key] = MANAGEMENT_DEFAULTS[key];
+        this._managementMessages.set(stableId, {
+          text: "Defaults loaded. Select Save to persist them.",
+          error: false,
+        });
+        this._render("management-defaults-loaded");
+        return;
+      }
+      button.disabled = true;
+      try {
+        if (!this._hass?.callWS)
+          throw new Error("Home Assistant management API unavailable");
+        if (action === "password-save") {
+          const passwordInput = Array.from(
+            this.shadowRoot?.querySelectorAll("[data-password-input]") || [],
+          ).find((item) => item.dataset.stableId === stableId);
+          const result = await this._hass.callWS({
+            type: "meshcore_noc/management/set_password",
+            stable_id: stableId,
+            password: passwordInput?.value || "",
+          });
+          if (passwordInput) passwordInput.value = "";
+          this._managementSettings.set(stableId, {
+            ...saved,
+            ...result,
+          });
+        } else if (action === "password-remove") {
+          const result = await this._hass.callWS({
+            type: "meshcore_noc/management/remove_password",
+            stable_id: stableId,
+          });
+          this._managementSettings.set(stableId, {
+            ...saved,
+            ...result,
+          });
+        } else {
+          const sectionSettings = { ...saved };
+          for (const key of sectionKeys) sectionSettings[key] = draft[key];
+          const settings = await this._hass.callWS({
+            type: "meshcore_noc/management/save",
+            stable_id: stableId,
+            settings: sectionSettings,
+          });
+          this._managementSettings.set(stableId, {
+            ...MANAGEMENT_DEFAULTS,
+            ...settings,
+          });
+          this._managementDrafts.set(stableId, {
+            ...MANAGEMENT_DEFAULTS,
+            ...settings,
+          });
+        }
+        this._managementMessages.set(stableId, {
+          text:
+            action === "password-remove"
+              ? "Repeater password removed."
+              : action === "password-save"
+                ? "New repeater password saved."
+                : "Repeater settings saved.",
+          error: false,
+        });
+      } catch (error) {
+        this._managementMessages.set(stableId, {
+          text: error?.message || "Settings were not saved",
+          error: true,
+        });
+      } finally {
+        button.disabled = false;
+        this._render("management-action-completed");
+      }
+    }
+    _managementSectionKeys(section) {
+      return (
+        {
+          calibration: ["voltage_offset", "empty_voltage", "full_voltage"],
+          thresholds: [
+            "battery_warning",
+            "battery_critical",
+            "fresh_max_age",
+            "aging_max_age",
+            "stale_max_age",
+            "offline_max_age",
+            "clock_warning",
+            "clock_critical",
+          ],
+          identity: ["display_name"],
+        }[section] || []
+      );
+    }
+    _managementInput(
+      form,
+      stableId,
+      field,
+      label,
+      value,
+      options = {},
+    ) {
+      const wrapper = this._element("label", "", label);
+      const input = this._element("input");
+      input.type = options.type || "number";
+      input.value = value ?? "";
+      input.dataset.managementField = field;
+      input.dataset.stableId = stableId;
+      if (options.step) input.step = String(options.step);
+      if (options.min !== undefined) input.min = String(options.min);
+      if (options.max !== undefined) input.max = String(options.max);
+      if (options.placeholder) input.placeholder = options.placeholder;
+      wrapper.append(input);
+      form.append(wrapper);
+      return input;
+    }
+    _managementButtons(panel, stableId, section) {
+      const actions = this._element("div", "detail-actions");
+      for (const [label, action, primary] of [
+        ["Save", "save", true],
+        ["Cancel", "cancel", false],
+        ["Reset Defaults", "reset", false],
+      ]) {
+        const button = this._element(
+          "button",
+          `clock-action${primary ? " primary" : ""}`,
+          label,
+        );
+        button.type = "button";
+        button.dataset.managementAction = action;
+        button.dataset.stableId = stableId;
+        button.dataset.section = section;
+        actions.append(button);
+      }
+      panel.append(actions);
+    }
+    _managementMessage(panel, stableId) {
+      const message = this._managementMessages.get(stableId);
+      panel.append(
+        this._element(
+          "div",
+          `management-message${message?.error ? " error" : ""}`,
+          message?.text || "",
+        ),
+      );
+    }
+    _displayName(repeater) {
+      const configured = this._managementFor(repeater.stableId).display_name;
+      return shortDisplayName(configured || repeater.name, repeater.stableId);
     }
     async _handleAction(event) {
       const button = event.target?.closest?.(
@@ -1224,15 +1547,17 @@ h1,h2,p{margin:0}
             alerts.length
               ? `${alerts.length} active issue${alerts.length === 1 ? "" : "s"}`
               : "No active alerts"
-          } · Auto Sync ${sync.automaticEnabled ? "On" : "Off"}`,
+          }`,
         ),
       );
       const clockLine = this._element(
         "div",
         "clock-line",
-        `Last Fleet Sync: ${formatDateTime(
+        `Fleet sync ${formatDateTime(
           stateValue(this._hass, fleet.lastSync)?.state,
-        )} · Clock ${clockSummaryTile(check.health).value}`,
+        )} · Auto ${sync.automaticEnabled ? "on" : "off"} · Clock ${
+          clockSummaryTile(check.health).value
+        }`,
       );
       summary.append(heading, statusLine, clockLine);
       const actions = this._element("div", "header-controls");
@@ -1264,7 +1589,13 @@ h1,h2,p{margin:0}
           : sync.result !== "—"
             ? `Last sync ${String(sync.result).replaceAll("_", " ")} · ${sync.successful} successful · ${sync.failed} failed`
             : "No clock operation running";
-      actions.append(this._element("div", "header-progress", operation));
+      actions.append(
+        this._element(
+          "div",
+          `header-progress ${operationClass(operation)}`,
+          operation,
+        ),
+      );
       const alertRow = this._element("div", "header-alerts");
       if (!alerts.length) {
         alertRow.append(
@@ -1304,6 +1635,7 @@ h1,h2,p{margin:0}
       );
       const rows = this._element("div", "fleet-rows");
       for (const repeater of repeaters) {
+        this._loadManagement(repeater.stableId);
         const status =
           metrics.statuses.find(
             (item) => item.repeater.stableId === repeater.stableId,
@@ -1312,22 +1644,31 @@ h1,h2,p{margin:0}
         const battery = clampBattery(
           numericState(this._hass, repeater.entities.battery),
         );
+        const clockState = stateValue(
+          this._hass,
+          repeater.entities.clockStatus,
+        );
+        const clock = clockStatusPresentation(clockState?.state);
+        const clockOffset = signedClockOffset(
+          this._hass,
+          repeater.entities.clockOffset,
+        );
         const row = this._element("a", `fleet-row ${status.label}`);
         row.href = `/meshcore-noc/${safePath(repeater.stableId)}`;
         row.setAttribute(
           "aria-label",
-          `Open ${shortDisplayName(repeater.name, repeater.stableId)} details`,
+          `Open ${this._displayName(repeater)} details`,
         );
         row.append(
-          this._element("span", "status-dot"),
+          this._element("span", `status-dot ${status.label}`),
           this._element(
             "span",
             "fleet-name",
-            shortDisplayName(repeater.name, repeater.stableId),
+            this._displayName(repeater),
           ),
           this._element(
             "span",
-            "fleet-value",
+            `fleet-value ${status.label}`,
             status.label === "offline"
               ? "Offline"
               : voltage === null
@@ -1336,15 +1677,23 @@ h1,h2,p{margin:0}
           ),
           this._element(
             "span",
-            "fleet-value",
+            `fleet-value ${
+              battery === null
+                ? "unknown"
+                : battery < this._managementFor(repeater.stableId).battery_critical
+                  ? "critical"
+                  : battery < this._managementFor(repeater.stableId).battery_warning
+                    ? "warning"
+                    : "healthy"
+            }`,
             battery === null ? "—" : `${Math.round(battery)}%`,
           ),
           this._element(
             "span",
-            "fleet-state",
-            `${status.label} · ${formatAge(
+            `fleet-state ${clock.className}`,
+            `Last Seen ${formatAge(
               repeaterAgeSeconds(this._hass, repeater),
-            )}`,
+            )} · Clock ${clockOffset}`,
           ),
         );
         rows.append(row);
@@ -1352,12 +1701,15 @@ h1,h2,p{margin:0}
       panel.append(rows);
       return panel;
     }
-    _detailMetric(container, label, value) {
+    _detailMetric(container, label, value, valueClass = "") {
       const metric = this._element("div", "detail-metric", label);
-      metric.append(this._element("b", "", value));
+      metric.append(this._element("b", valueClass, value));
       container.append(metric);
     }
-    _detailView(repeater, fleet, check, sync) {
+    _detailView(repeater, repeaters, fleet, check, sync) {
+      this._loadManagement(repeater.stableId);
+      const settings = this._managementFor(repeater.stableId);
+      const draft = this._draftFor(repeater.stableId);
       const status = repeaterStatus(this._hass, repeater);
       const voltageState = stateValue(this._hass, repeater.entities.voltage);
       const batteryState = stateValue(this._hass, repeater.entities.battery);
@@ -1368,7 +1720,7 @@ h1,h2,p{margin:0}
       const clockAttributes = clockState?.attributes || {};
       const voltageAttributes = voltageState?.attributes || {};
       const batteryAttributes = batteryState?.attributes || {};
-      const name = shortDisplayName(repeater.name, repeater.stableId);
+      const name = this._displayName(repeater);
       const online =
         status.label !== "offline" &&
         (numericState(this._hass, repeater.entities.voltage) !== null ||
@@ -1385,14 +1737,25 @@ h1,h2,p{margin:0}
             online ? "Online" : status.label === "offline" ? "Offline" : "Unknown"
           } · ${this._value(repeater.entities.voltage)} · ${this._value(
             repeater.entities.battery,
-          )} · Seen ${formatAge(
+          )} · Last Seen ${formatAge(
             repeaterAgeSeconds(this._hass, repeater),
           )} · Clock ${clock.label}`,
         ),
       );
-      const back = this._element("a", "back-link", "← Fleet overview");
+      const navigation = this._element("nav", "detail-navigation");
+      const index = repeaters.findIndex(
+        (item) => item.stableId === repeater.stableId,
+      );
+      const previous = repeaters[(index - 1 + repeaters.length) % repeaters.length];
+      const next = repeaters[(index + 1) % repeaters.length];
+      const previousLink = this._element("a", "back-link", "← Previous Repeater");
+      previousLink.href = `/meshcore-noc/${safePath(previous.stableId)}`;
+      const back = this._element("a", "back-link", "Fleet");
       back.href = "/meshcore-noc/network";
-      header.append(title, back);
+      const nextLink = this._element("a", "back-link", "Next Repeater →");
+      nextLink.href = `/meshcore-noc/${safePath(next.stableId)}`;
+      navigation.append(previousLink, back, nextLink);
+      header.append(title, navigation);
       fragment.append(header, this._historyChart(`${name} voltage`, [repeater]));
       const grid = this._element("section", "detail-grid");
       const monitoring = this._element("section", "detail-panel");
@@ -1415,7 +1778,7 @@ h1,h2,p{margin:0}
       );
       this._detailMetric(
         monitoringMetrics,
-        "Freshness",
+        "Last Seen status",
         freshnessState?.attributes?.freshness_status || "Unknown",
       );
       this._detailMetric(
@@ -1444,7 +1807,12 @@ h1,h2,p{margin:0}
         ["Last error", clockAttributes.last_sync_error || clockAttributes.last_clock_attempt_error || "—"],
       ];
       for (const [label, value] of clockRows)
-        this._detailMetric(clockMetrics, label, value);
+        this._detailMetric(
+          clockMetrics,
+          label,
+          value,
+          label === "Operation" ? operationClass(value) : "",
+        );
       const busy = repeaterClockBusy(this._hass, repeater, check, sync);
       const clockActions = this._element("div", "detail-actions");
       clockActions.append(
@@ -1475,7 +1843,6 @@ h1,h2,p{margin:0}
       const sourceEntity = voltageAttributes.source_entity;
       const sourceState = stateValue(this._hass, sourceEntity);
       const identityRows = [
-        ["Dashboard name", name],
         ["Full source name", sourceState?.attributes?.friendly_name || repeater.name],
         ["Stable identifier", repeater.stableId],
         ["Public-key prefix", clockAttributes.pubkey_prefix || "Unavailable"],
@@ -1484,50 +1851,209 @@ h1,h2,p{margin:0}
       ];
       for (const [label, value] of identityRows)
         this._detailMetric(identityMetrics, label, value);
+      const identityForm = this._element("div", "management-form");
+      this._managementInput(
+        identityForm,
+        repeater.stableId,
+        "display_name",
+        "Dashboard Display Name",
+        draft.display_name || "",
+        {
+          type: "text",
+          placeholder: shortDisplayName(repeater.name, repeater.stableId),
+        },
+      );
       const deviceLink = this._element(
         "a",
         "back-link",
         "Open Home Assistant device settings",
       );
       deviceLink.href = `/config/devices/device/${repeater.deviceId}`;
-      identity.append(identityMetrics, deviceLink);
+      identity.append(identityMetrics, identityForm);
+      this._managementButtons(identity, repeater.stableId, "identity");
+      identity.append(deviceLink);
       const calibration = this._element("section", "detail-panel");
       calibration.append(this._element("h2", "", "Battery calibration"));
-      const calibrationMetrics = this._element("div", "detail-metrics");
-      const calibrationRows = [
-        ["Voltage offset", voltageAttributes.calibration_offset ?? "—"],
-        ["Empty voltage", batteryAttributes.battery_empty_voltage ?? "—"],
-        ["Full voltage", batteryAttributes.battery_full_voltage ?? "—"],
-        ["Raw voltage", voltageAttributes.raw_voltage ?? "—"],
-        ["Calibrated preview", this._value(repeater.entities.voltage)],
-        ["Battery preview", this._value(repeater.entities.battery)],
-      ];
-      for (const [label, value] of calibrationRows)
-        this._detailMetric(calibrationMetrics, label, value);
-      calibration.append(
-        calibrationMetrics,
+      const calibrationForm = this._element("div", "management-form");
+      this._managementInput(
+        calibrationForm,
+        repeater.stableId,
+        "voltage_offset",
+        "Voltage Offset (V)",
+        draft.voltage_offset,
+        { step: 0.001, min: -2, max: 2 },
+      );
+      this._managementInput(
+        calibrationForm,
+        repeater.stableId,
+        "empty_voltage",
+        "Empty Voltage (V)",
+        draft.empty_voltage,
+        { step: 0.001, min: 2, max: 6 },
+      );
+      this._managementInput(
+        calibrationForm,
+        repeater.stableId,
+        "full_voltage",
+        "Full Voltage (V)",
+        draft.full_voltage,
+        { step: 0.001, min: 2, max: 6 },
+      );
+      const rawVoltage =
+        voltageAttributes.raw_voltage === null ||
+        voltageAttributes.raw_voltage === undefined
+          ? Number.NaN
+          : Number(voltageAttributes.raw_voltage);
+      const previewVoltage = rawVoltage + Number(draft.voltage_offset);
+      const previewBattery =
+        Number.isFinite(previewVoltage) &&
+        Number(draft.full_voltage) > Number(draft.empty_voltage)
+          ? Math.round(
+              Math.max(
+                0,
+                Math.min(
+                  100,
+                  ((previewVoltage - Number(draft.empty_voltage)) /
+                    (Number(draft.full_voltage) - Number(draft.empty_voltage))) *
+                    100,
+                ),
+              ),
+            )
+          : null;
+      const preview = this._element("div", "management-preview");
+      const rawPreview = this._element("div", "detail-metric", "Raw Voltage");
+      rawPreview.dataset.previewRaw = repeater.stableId;
+      rawPreview.dataset.rawVoltage = Number.isFinite(rawVoltage)
+        ? String(rawVoltage)
+        : "";
+      rawPreview.append(
         this._element(
-          "div",
-          "settings-note",
-          "Per-repeater calibration overrides and reset are not exposed by the current backend. Values are read-only in beta4.",
+          "b",
+          "",
+          Number.isFinite(rawVoltage) ? `${rawVoltage.toFixed(3)} V` : "—",
         ),
       );
+      const offsetPreview = this._element("div", "detail-metric", "Offset");
+      const offsetValue = this._element("b", "", `${draft.voltage_offset} V`);
+      offsetValue.dataset.previewOffset = repeater.stableId;
+      offsetPreview.append(offsetValue);
+      const calibratedPreview = this._element(
+        "div",
+        "detail-metric",
+        "Calibrated Voltage",
+      );
+      const calibratedValue = this._element(
+        "b",
+        "",
+        Number.isFinite(previewVoltage)
+          ? `${previewVoltage.toFixed(3)} V`
+          : "—",
+      );
+      calibratedValue.dataset.previewCalibrated = repeater.stableId;
+      calibratedPreview.append(calibratedValue);
+      const batteryPreview = this._element(
+        "div",
+        "detail-metric",
+        "Calculated Battery %",
+      );
+      const batteryValue = this._element(
+        "b",
+        "",
+        previewBattery === null ? "—" : `${previewBattery}%`,
+      );
+      batteryValue.dataset.previewBattery = repeater.stableId;
+      batteryPreview.append(batteryValue);
+      preview.append(
+        rawPreview,
+        offsetPreview,
+        calibratedPreview,
+        batteryPreview,
+      );
+      calibrationForm.append(preview);
+      calibration.append(calibrationForm);
+      this._managementButtons(calibration, repeater.stableId, "calibration");
       const thresholds = this._element("section", "detail-panel wide");
-      thresholds.append(
-        this._element("h2", "", "Monitoring thresholds and configuration"),
+      thresholds.append(this._element("h2", "", "Monitoring thresholds"));
+      const thresholdForm = this._element("div", "management-form");
+      const thresholdFields = [
+        ["battery_warning", "Battery Warning (%)", 1, 1, 100],
+        ["battery_critical", "Battery Critical (%)", 1, 0, 99],
+        ["fresh_max_age", "Fresh maximum age (seconds)", 1, 60, 604800],
+        ["aging_max_age", "Aging maximum age (seconds)", 1, 60, 604800],
+        ["stale_max_age", "Stale maximum age (seconds)", 1, 60, 604800],
+        ["offline_max_age", "Offline at age (seconds)", 1, 60, 604800],
+        ["clock_warning", "Clock Warning (seconds)", 1, 1, 86400],
+        ["clock_critical", "Clock Critical (seconds)", 1, 1, 86400],
+      ];
+      for (const [field, label, step, min, max] of thresholdFields)
+        this._managementInput(
+          thresholdForm,
+          repeater.stableId,
+          field,
+          label,
+          draft[field],
+          { step, min, max },
+        );
+      thresholds.append(thresholdForm);
+      this._managementButtons(thresholds, repeater.stableId, "thresholds");
+      const access = this._element("section", "detail-panel wide");
+      access.append(this._element("h2", "", "Repeater access"));
+      access.append(
         this._element(
           "div",
-          "settings-note",
-          "Freshness, battery and clock thresholds currently use integration defaults. Persistent per-repeater overrides, notes, location, visibility and custom display order are deferred until an integration-backed storage model is available.",
+          `password-state ${settings.password_configured ? "healthy" : "unknown"}`,
+          `Status: ${settings.password_configured ? "Configured ✓" : "Not configured"}`,
         ),
       );
-      const optionsLink = this._element(
-        "a",
-        "back-link",
-        "Open MeshCore NOC integration options",
+      access.append(
+        this._element(
+          "div",
+          "password-state",
+          `Last changed: ${
+            settings.password_last_changed
+              ? formatDateTime(settings.password_last_changed)
+              : "Never"
+          }`,
+        ),
       );
-      optionsLink.href = "/config/integrations/integration/meshcore_noc";
-      thresholds.append(optionsLink);
+      const passwordForm = this._element("div", "management-form");
+      const passwordLabel = this._element(
+        "label",
+        "",
+        settings.password_configured ? "Change password" : "New password",
+      );
+      const passwordInput = this._element("input");
+      passwordInput.type = "password";
+      passwordInput.autocomplete = "new-password";
+      passwordInput.dataset.passwordInput = "true";
+      passwordInput.dataset.stableId = repeater.stableId;
+      passwordInput.placeholder = "Enter a new password";
+      passwordLabel.append(passwordInput);
+      passwordForm.append(passwordLabel);
+      access.append(passwordForm);
+      const passwordActions = this._element("div", "detail-actions");
+      for (const [label, action, primary, disabled] of [
+        ["Save password", "password-save", true, false],
+        [
+          "Remove password",
+          "password-remove",
+          false,
+          !settings.password_configured,
+        ],
+      ]) {
+        const button = this._element(
+          "button",
+          `clock-action${primary ? " primary" : ""}`,
+          label,
+        );
+        button.type = "button";
+        button.disabled = disabled;
+        button.dataset.managementAction = action;
+        button.dataset.stableId = repeater.stableId;
+        passwordActions.append(button);
+      }
+      access.append(passwordActions);
+      this._managementMessage(access, repeater.stableId);
       const advanced = this._element("details", "detail-panel wide advanced");
       advanced.append(this._element("summary", "", "Advanced diagnostics"));
       const diagnosticMetrics = this._element("div", "detail-metrics");
@@ -1542,7 +2068,15 @@ h1,h2,p{margin:0}
       for (const [label, value] of diagnosticRows)
         this._detailMetric(diagnosticMetrics, label, value);
       advanced.append(diagnosticMetrics);
-      grid.append(monitoring, clockPanel, identity, calibration, thresholds, advanced);
+      grid.append(
+        monitoring,
+        clockPanel,
+        identity,
+        calibration,
+        thresholds,
+        access,
+        advanced,
+      );
       fragment.append(grid);
       return fragment;
     }
@@ -1616,7 +2150,15 @@ h1,h2,p{margin:0}
       ];
       for (const [label, value] of cells) {
         const cell = this._element("div", "clock-cell", label);
-        cell.append(this._element("b", "", value));
+        cell.append(
+          this._element(
+            "b",
+            ["Clock State", "Fleet Sync State"].includes(label)
+              ? operationClass(value)
+              : "",
+            value,
+          ),
+        );
         section.append(cell);
       }
       const actions = this._element("div", "clock-actions");
@@ -1799,7 +2341,7 @@ h1,h2,p{margin:0}
       this._addRow(
         card,
         "mdi:clock-outline",
-        "Freshness",
+        "Last Seen",
         formatAge(repeaterAgeSeconds(this._hass, repeater)),
         status.label,
       );
@@ -1937,6 +2479,7 @@ h1,h2,p{margin:0}
           renderShell.append(
             this._detailView(
               repeater,
+              repeaters,
               fleetClock,
               clockFleetMetrics,
               syncFleetMetrics,

@@ -15,13 +15,15 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     AGING_MAX_AGE,
-    EMPTY_VOLTAGE,
     FRESH_MAX_AGE,
-    FULL_VOLTAGE,
     MAX_VALID_VOLTAGE,
     MIN_VALID_VOLTAGE,
     STALE_MAX_AGE,
-    VOLTAGE_OFFSET,
+)
+from .management import (
+    DEFAULT_REPEATER_SETTINGS,
+    RepeaterManagementStore,
+    RepeaterSettings,
 )
 from .models import DiscoveredSourceRepeater, ManagedDeviceData
 from .naming import managed_device_name
@@ -29,24 +31,35 @@ from .naming import managed_device_name
 _LOGGER = logging.getLogger(__name__)
 
 
-def _freshness(age_seconds: int | None, available: bool) -> str:
+def _freshness(
+    age_seconds: int | None,
+    available: bool,
+    fresh_max_age: int = FRESH_MAX_AGE,
+    aging_max_age: int = AGING_MAX_AGE,
+    offline_max_age: int = STALE_MAX_AGE,
+) -> str:
     """Classify source telemetry using the production dashboard thresholds."""
-    if not available or age_seconds is None or age_seconds >= STALE_MAX_AGE:
+    if not available or age_seconds is None or age_seconds >= offline_max_age:
         return "Offline"
-    if age_seconds >= AGING_MAX_AGE:
+    if age_seconds >= aging_max_age:
         return "Stale"
-    if age_seconds >= FRESH_MAX_AGE:
+    if age_seconds >= fresh_max_age:
         return "Aging"
     return "Fresh"
 
 
-def calculate_health(battery: int | None, freshness: str) -> str:
+def calculate_health(
+    battery: int | None,
+    freshness: str,
+    battery_warning: int = 40,
+    battery_critical: int = 20,
+) -> str:
     """Calculate alpha2 health independently from entity presentation."""
     if battery is None:
         return "Unknown"
-    if freshness == "Offline" or battery < 20:
+    if freshness == "Offline" or battery < battery_critical:
         return "Poor"
-    if freshness == "Stale" or battery < 40:
+    if freshness == "Stale" or battery < battery_warning:
         return "Fair"
     if freshness == "Aging" or battery < 80:
         return "Good"
@@ -63,6 +76,7 @@ class MeshCoreNocCoordinator(DataUpdateCoordinator[ManagedDeviceData]):
         hass: HomeAssistant,
         config_entry: ConfigEntry,
         source: DiscoveredSourceRepeater,
+        management_store: RepeaterManagementStore | None = None,
         *,
         legacy_identity: bool = True,
     ) -> None:
@@ -76,10 +90,17 @@ class MeshCoreNocCoordinator(DataUpdateCoordinator[ManagedDeviceData]):
         )
         self.config_entry = config_entry
         self.source = source
+        self.management_store = management_store
         self.legacy_identity = legacy_identity
         self.last_attempted_update: datetime | None = None
         self.last_successful_update: datetime | None = None
         self._unsub_source_listener: Callable[[], None] | None = None
+
+    def _settings(self) -> RepeaterSettings:
+        """Return current per-repeater settings or production defaults."""
+        if self.management_store is None:
+            return DEFAULT_REPEATER_SETTINGS
+        return self.management_store.settings_for(self.source.stable_id)
 
     @property
     def source_listener_registered(self) -> bool:
@@ -91,10 +112,11 @@ class MeshCoreNocCoordinator(DataUpdateCoordinator[ManagedDeviceData]):
         """Return the next threshold crossing for available telemetry."""
         if not self.data.source_available or self.data.last_source_update is None:
             return None
+        settings = self._settings()
         threshold = {
-            "Fresh": FRESH_MAX_AGE,
-            "Aging": AGING_MAX_AGE,
-            "Stale": STALE_MAX_AGE,
+            "Fresh": settings.fresh_max_age,
+            "Aging": settings.aging_max_age,
+            "Stale": settings.offline_max_age,
         }.get(self.data.freshness)
         if threshold is None:
             return None
@@ -127,6 +149,7 @@ class MeshCoreNocCoordinator(DataUpdateCoordinator[ManagedDeviceData]):
     async def _async_update_data(self) -> ManagedDeviceData:
         """Read the Alpha1 mapping and calculate all exposed values once."""
         self.last_attempted_update = dt_util.utcnow()
+        settings = self._settings()
         source_entity = self.source.entities.voltage
         state = self.hass.states.get(source_entity) if source_entity else None
         source_available = bool(
@@ -142,12 +165,12 @@ class MeshCoreNocCoordinator(DataUpdateCoordinator[ManagedDeviceData]):
         calibrated_voltage: float | None = None
         battery_percentage: int | None = None
         if raw_voltage is not None:
-            calibrated = raw_voltage + VOLTAGE_OFFSET
+            calibrated = raw_voltage + settings.voltage_offset
             if MIN_VALID_VOLTAGE <= calibrated <= MAX_VALID_VOLTAGE:
                 calibrated_voltage = round(calibrated, 3)
                 percentage = (
-                    (calibrated_voltage - EMPTY_VOLTAGE)
-                    / (FULL_VOLTAGE - EMPTY_VOLTAGE)
+                    (calibrated_voltage - settings.empty_voltage)
+                    / (settings.full_voltage - settings.empty_voltage)
                     * 100
                 )
                 battery_percentage = round(max(0, min(100, percentage)))
@@ -161,23 +184,35 @@ class MeshCoreNocCoordinator(DataUpdateCoordinator[ManagedDeviceData]):
                 updated = updated.replace(tzinfo=UTC)
             age_seconds = max(0, int((now - updated).total_seconds()))
 
-        freshness = _freshness(age_seconds, source_available)
+        freshness = _freshness(
+            age_seconds,
+            source_available,
+            settings.fresh_max_age,
+            settings.aging_max_age,
+            settings.offline_max_age,
+        )
         data = ManagedDeviceData(
             stable_id=self.source.stable_id,
             managed_device=managed_device_name(
-                self.source.display_name, self.source.stable_id
+                settings.display_name or self.source.display_name,
+                self.source.stable_id,
             ),
             source_entity=source_entity,
             raw_voltage=raw_voltage,
             calibrated_voltage=calibrated_voltage,
             battery_percentage=battery_percentage,
-            calibration_offset=VOLTAGE_OFFSET,
-            empty_voltage=EMPTY_VOLTAGE,
-            full_voltage=FULL_VOLTAGE,
+            calibration_offset=settings.voltage_offset,
+            empty_voltage=settings.empty_voltage,
+            full_voltage=settings.full_voltage,
             last_source_update=last_source_update,
             age_seconds=age_seconds,
             freshness=freshness,
-            health=calculate_health(battery_percentage, freshness),
+            health=calculate_health(
+                battery_percentage,
+                freshness,
+                settings.battery_warning,
+                settings.battery_critical,
+            ),
             source_available=source_available,
         )
         self.last_successful_update = dt_util.utcnow()

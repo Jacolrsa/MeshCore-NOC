@@ -121,6 +121,8 @@ def test_clock_parser_and_offset_calculation() -> None:
     assert classify_clock_status(-31) is ClockStatus.YELLOW
     assert classify_clock_status(121) is ClockStatus.ORANGE
     assert classify_clock_status(-301) is ClockStatus.RED
+    assert classify_clock_status(91, 90, 180) is ClockStatus.ORANGE
+    assert classify_clock_status(-181, 90, 180) is ClockStatus.RED
 
 
 @pytest.mark.asyncio

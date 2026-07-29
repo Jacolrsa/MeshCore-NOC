@@ -285,9 +285,12 @@ single-repeater check action and invokes the existing authenticated
 `meshcore_noc.sync_repeater_clock` service.
 
 Detail views consolidate monitoring, clock status/results, source identity,
-calibration values and advanced diagnostics. Settings without an existing
-persistent integration model are shown as read-only or explicitly deferred;
-the dashboard never presents non-persistent controls as editable settings.
+advanced diagnostics, and explicit per-repeater management. Administrators can
+save calibrated-voltage settings, battery/Last Seen/clock thresholds, a
+dashboard display name, and a private repeater password. Settings are keyed by
+the existing NOC stable ID and persist through Home Assistant restarts and
+integration reloads. A stored password is never returned by the backend,
+exposed by entities or diagnostics, or written to integration logs.
 
 Recorder is required only for historical graphs. If another dashboard already
 uses the `meshcore-noc` path, the integration preserves it and posts a

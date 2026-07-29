@@ -61,6 +61,10 @@ from .fleet_sync import (
     FleetClockSyncOrchestrator,
     FleetClockSyncTrigger,
 )
+from .management import (
+    RepeaterManagementStore,
+    async_register_management_websockets,
+)
 from .models import DeviceType, DiscoveryResult
 from .updater import MeshCoreNocUpdateCoordinator
 
@@ -116,6 +120,7 @@ class MeshCoreNocRuntimeData:
     clock_manager: MeshCoreNocClockManager
     fleet_clock_orchestrator: FleetClockOrchestrator
     fleet_clock_sync_orchestrator: FleetClockSyncOrchestrator
+    management_store: RepeaterManagementStore
 
     @property
     def coordinator(self) -> MeshCoreNocCoordinator | None:
@@ -126,6 +131,12 @@ class MeshCoreNocRuntimeData:
 type MeshCoreNocConfigEntry = ConfigEntry[MeshCoreNocRuntimeData]
 
 
+async def async_setup(hass: HomeAssistant, _config: dict[str, object]) -> bool:
+    """Register the integration-wide administrator management API."""
+    async_register_management_websockets(hass)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: MeshCoreNocConfigEntry) -> bool:
     """Set up every selected managed MeshCore device."""
     if not hass.config_entries.async_entries(MESHCORE_DOMAIN):
@@ -133,6 +144,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: MeshCoreNocConfigEntry) 
 
     discovery = await async_discover_repeaters(hass)
     selected = tuple(dict.fromkeys(entry.options.get(CONF_MANAGED_REPEATER_IDS, [])))
+    management_store = RepeaterManagementStore(
+        hass, f"{DOMAIN}.repeater_management.{entry.entry_id}"
+    )
+    await management_store.async_initialize()
     coordinators: list[MeshCoreNocCoordinator] = []
     legacy_stable_id = _legacy_managed_stable_id(hass, selected)
     try:
@@ -144,6 +159,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: MeshCoreNocConfigEntry) 
                 hass,
                 entry,
                 source,
+                management_store,
                 legacy_identity=stable_id == legacy_stable_id,
             )
             coordinator.async_start_source_listener()
@@ -192,6 +208,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: MeshCoreNocConfigEntry) 
         managed_repeater_addressability=clock_target_discovery.addressability,
         cooldown_seconds=int(
             entry.options.get(CONF_CLOCK_CHECK_COOLDOWN, DEFAULT_CLOCK_CHECK_COOLDOWN)
+        ),
+        clock_thresholds=lambda stable_id: (
+            management_store.settings_for(stable_id).clock_warning,
+            management_store.settings_for(stable_id).clock_critical,
         ),
     )
     fleet_clock_orchestrator = FleetClockOrchestrator(
@@ -253,6 +273,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: MeshCoreNocConfigEntry) 
         clock_manager,
         fleet_clock_orchestrator,
         fleet_clock_sync_orchestrator,
+        management_store,
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     clock_manager.async_start()

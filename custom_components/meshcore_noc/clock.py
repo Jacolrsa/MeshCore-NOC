@@ -291,16 +291,20 @@ def calculate_clock_offset(sender_timestamp: int, received_at: datetime) -> int:
     return round(sender_timestamp - received_at.timestamp())
 
 
-def classify_clock_status(offset_seconds: int | None) -> ClockStatus:
+def classify_clock_status(
+    offset_seconds: int | None,
+    warning_seconds: int = 120,
+    critical_seconds: int = 300,
+) -> ClockStatus:
     """Classify absolute drift using the Phase 1 thresholds."""
     if offset_seconds is None:
         return ClockStatus.UNKNOWN
     absolute_offset = abs(offset_seconds)
     if absolute_offset <= 30:
         return ClockStatus.GREEN
-    if absolute_offset <= 120:
+    if absolute_offset <= warning_seconds:
         return ClockStatus.YELLOW
-    if absolute_offset <= 300:
+    if absolute_offset <= critical_seconds:
         return ClockStatus.ORANGE
     return ClockStatus.RED
 
@@ -331,6 +335,7 @@ class MeshCoreNocClockManager:
         timeout_seconds: float = CLOCK_RESPONSE_TIMEOUT,
         now: Callable[[], datetime] = dt_util.utcnow,
         monotonic_time: Callable[[], float] = monotonic,
+        clock_thresholds: Callable[[str], tuple[int, int]] | None = None,
     ) -> None:
         """Initialize without accessing MeshCore integration internals."""
         self.hass = hass
@@ -342,6 +347,7 @@ class MeshCoreNocClockManager:
         self.timeout_seconds = timeout_seconds
         self._now = now
         self._monotonic = monotonic_time
+        self._clock_thresholds = clock_thresholds
         self._pending: dict[str, _PendingClockRequest] = {}
         self._pending_sync: dict[str, _PendingClockSync] = {}
         self._sync_tasks: set[asyncio.Task[Any]] = set()
@@ -981,7 +987,14 @@ class MeshCoreNocClockManager:
         result.clock_offset_seconds = calculate_clock_offset(
             sender_timestamp, received_at
         )
-        result.clock_status = classify_clock_status(result.clock_offset_seconds)
+        warning, critical = (
+            self._clock_thresholds(result.stable_id)
+            if self._clock_thresholds is not None
+            else (120, 300)
+        )
+        result.clock_status = classify_clock_status(
+            result.clock_offset_seconds, warning, critical
+        )
         result.error = None
         result.last_successful_clock_check = received_at
         result.last_clock_attempt_outcome = ClockAttemptOutcome.SUCCESS

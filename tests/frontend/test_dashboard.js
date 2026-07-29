@@ -598,6 +598,17 @@ assert(
   frontendSource.includes('refreshOverviewCard(this, "connected")'),
 );
 assert(frontendSource.includes("if (!this.isConnected || !shell"));
+assert(frontendSource.includes('type: "meshcore_noc/management/get"'));
+assert(frontendSource.includes('type: "meshcore_noc/management/save"'));
+assert(frontendSource.includes('type: "meshcore_noc/management/set_password"'));
+assert(frontendSource.includes("Configured ✓"));
+assert(frontendSource.includes("Last changed:"));
+assert(frontendSource.includes("Previous Repeater"));
+assert(frontendSource.includes("Next Repeater"));
+assert(frontendSource.includes("Last Seen"));
+assert(frontendSource.includes("Clock ${clockOffset}"));
+assert(frontendSource.includes("gapBefore"));
+assert(frontendSource.includes('["unknown", "unavailable"].includes'));
 
 const originalGetComputedStyle = global.getComputedStyle;
 global.getComputedStyle = (element) => {
@@ -886,6 +897,58 @@ assert(
     `ll-strategy-dashboard-${target.customStrategies[0].type}`,
   ),
   "picker metadata type must resolve to the registered custom element",
+);
+
+const overviewClass = definitions.get("meshcore-noc-overview-card");
+const managementCard = Object.create(overviewClass.prototype);
+managementCard._managementSettings = new Map([
+  ["first", { voltage_offset: -0.5, display_name: "First" }],
+  ["second", { voltage_offset: 0.5, display_name: "Second" }],
+]);
+managementCard._managementDrafts = new Map([
+  ["first", { voltage_offset: 0.75, display_name: "First draft" }],
+  ["second", { voltage_offset: 0.5, display_name: "Second draft" }],
+]);
+managementCard._managementLoads = new Set();
+managementCard._managementMessages = new Map();
+managementCard._render = () => {};
+const managementEvent = (action, stableId, section) => ({
+  target: {
+    closest: () => ({
+      dataset: {
+        managementAction: action,
+        stableId,
+        section,
+      },
+      disabled: false,
+    }),
+  },
+});
+managementCard._handleManagementAction(
+  managementEvent("cancel", "first", "calibration"),
+);
+assert.equal(
+  managementCard._managementDrafts.get("first").voltage_offset,
+  -0.5,
+);
+assert.equal(
+  managementCard._managementDrafts.get("first").display_name,
+  "First draft",
+);
+assert.equal(
+  managementCard._managementDrafts.get("second").display_name,
+  "Second draft",
+);
+managementCard._handleManagementAction(
+  managementEvent("reset", "first", "identity"),
+);
+assert.equal(
+  managementCard._managementDrafts.get("first").display_name,
+  null,
+);
+assert.equal(
+  managementCard._managementDrafts.get("second").display_name,
+  "Second draft",
 );
 
 const strategyClass = definitions.get(

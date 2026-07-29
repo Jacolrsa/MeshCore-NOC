@@ -5,6 +5,34 @@ All notable changes to MeshCore NOC will be documented in this file.
 The format is based on Keep a Changelog, and versioning follows Semantic
 Versioning.
 
+## [1.1.0-beta5]
+
+### Added
+
+- Persistent per-repeater management settings keyed by the existing NOC stable
+  ID, including battery calibration, monitoring thresholds, display name, and
+  a private repeater password record.
+- Administrator-only dashboard management API that never returns or logs
+  stored passwords.
+- Editable repeater detail sections with explicit Save, Cancel, and Reset
+  Defaults controls, live battery-calibration preview, validation feedback,
+  and previous/next repeater navigation.
+
+### Changed
+
+- Polished the beta4 fleet layout with calmer network status, consistent
+  health colours, clock offsets, and operator-facing `Last Seen` wording.
+- Applied per-repeater calibration, battery/freshness thresholds, and clock
+  warning/critical thresholds without changing entity IDs or service names.
+- Preserved missing recorder history as gaps instead of interpreting absent
+  values as zero volts.
+
+### Security
+
+- Repeater passwords are stored in Home Assistant private persistent storage,
+  never exposed through entities, websocket reads, logs, or diagnostics, and
+  can only be changed or removed by an administrator.
+
 ## [1.1.0-beta4]
 
 ### Changed
