@@ -192,6 +192,28 @@ readings and run state are not restored after restart.
 Phase 2 does not set clocks, reboot repeaters, send alerts, or perform automatic
 correction.
 
+## Fleet Clock Sync upstream capability gap
+
+Remote clock reading is supported through:
+
+```text
+meshcore.execute_command -> send_cmd <repeater> "clock"
+```
+
+Local companion time setting is supported through:
+
+```text
+set_time(epoch)
+```
+
+Remote repeater time setting is not currently exposed through `meshcore_py` or
+the Home Assistant MeshCore integration. The firmware `time <epoch>` command
+is serial-only. `clkreboot` is not a clock synchronisation mechanism.
+
+Fleet Clock Sync must remain disabled until upstream provides a documented,
+remotely addressable clock-set operation with response, authentication,
+timeout, and error semantics.
+
 ## Goals
 
 - Add explainable operational intelligence for each managed repeater.
