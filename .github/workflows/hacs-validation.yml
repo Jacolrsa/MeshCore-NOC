@@ -1,0 +1,22 @@
+name: HACS validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - v1.1-clock-sync
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: HACS validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate integration repository
+        uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+        with:
+          category: integration
+          comment: "false"
