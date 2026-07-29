@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from custom_components.meshcore_noc.const import INTEGRATION_VERSION
 from custom_components.meshcore_noc.dashboard import (
     DASHBOARD_URL_PATH,
     RESOURCE_URL,
@@ -89,7 +90,7 @@ async def test_frontend_registration_is_cache_safe(monkeypatch):
     assert Path(registration.path).is_file()
     assert registration.cache_headers
     assert RESOURCE_URL.startswith(f"{STATIC_URL}?v=")
-    assert RESOURCE_URL.endswith("?v=1.0.0")
+    assert RESOURCE_URL.endswith(f"?v={INTEGRATION_VERSION}")
     resources.async_create_item.assert_awaited_once_with(
         {"res_type": "module", "url": RESOURCE_URL}
     )

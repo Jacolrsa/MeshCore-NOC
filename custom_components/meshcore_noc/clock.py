@@ -83,6 +83,20 @@ class ClockAttemptOutcome(StrEnum):
     MALFORMED = "malformed"
 
 
+class ClockSyncState(StrEnum):
+    """Stable service result for one repeater clock synchronization."""
+
+    SUCCESS = "success"
+    ALREADY_AHEAD = "already_ahead"
+    TIMEOUT = "timeout"
+    UNRESOLVED = "unresolved"
+    UNAUTHORIZED = "unauthorized"
+    COMMAND_FAILED = "command_failed"
+    VERIFICATION_FAILED = "verification_failed"
+    CANCELLED = "cancelled"
+    FAILED = "failed"
+
+
 @dataclass(frozen=True, slots=True)
 class ClockTarget:
     """Public addressing data for one managed repeater."""
@@ -159,6 +173,14 @@ class ClockResult:
     last_clock_attempt: datetime | None = None
     last_clock_attempt_outcome: ClockAttemptOutcome | None = None
     last_clock_attempt_error: str | None = None
+    last_sync_result: ClockSyncState | None = None
+    last_sync_time: datetime | None = None
+    offset_before_sync_seconds: int | None = None
+    offset_after_sync_seconds: int | None = None
+    sync_duration_seconds: float | None = None
+    last_sync_response: str | None = None
+    last_sync_error: str | None = None
+    sync_running: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         """Return a Home Assistant service-response-safe representation."""
@@ -179,7 +201,35 @@ class ClockResult:
             "last_clock_attempt": self.last_clock_attempt,
             "last_clock_attempt_outcome": self.last_clock_attempt_outcome,
             "last_clock_attempt_error": self.last_clock_attempt_error,
+            "last_sync_result": self.last_sync_result,
+            "last_sync_time": self.last_sync_time,
+            "offset_before_sync_seconds": self.offset_before_sync_seconds,
+            "offset_after_sync_seconds": self.offset_after_sync_seconds,
+            "sync_duration_seconds": self.sync_duration_seconds,
+            "last_sync_response": self.last_sync_response,
+            "last_sync_error": self.last_sync_error,
+            "sync_running": self.sync_running,
         }
+
+
+@dataclass(slots=True)
+class ClockSyncResult:
+    """Service response for one bounded repeater clock synchronization."""
+
+    stable_id: str
+    pubkey_prefix: str | None
+    result: ClockSyncState
+    started_at: datetime
+    completed_at: datetime | None = None
+    duration_seconds: float | None = None
+    pre_sync_offset_seconds: int | None = None
+    post_sync_offset_seconds: int | None = None
+    remote_response_text: str | None = None
+    error: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return a Home Assistant service-response-safe representation."""
+        return asdict(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,6 +259,13 @@ class _PendingClockRequest:
     requested_at: datetime
     started_monotonic: float
     future: asyncio.Future[ClockResult]
+
+
+@dataclass(slots=True)
+class _PendingClockSync:
+    target: ClockTarget
+    started_at: datetime
+    future: asyncio.Future[str]
 
 
 def parse_clock_text(text: str) -> datetime:
@@ -286,6 +343,8 @@ class MeshCoreNocClockManager:
         self._now = now
         self._monotonic = monotonic_time
         self._pending: dict[str, _PendingClockRequest] = {}
+        self._pending_sync: dict[str, _PendingClockSync] = {}
+        self._sync_tasks: set[asyncio.Task[Any]] = set()
         self._results = {
             stable_id: ClockResult(stable_id, target.pubkey_prefix)
             for stable_id, target in self.targets.items()
@@ -385,6 +444,13 @@ class MeshCoreNocClockManager:
             if not pending.future.done():
                 pending.future.cancel()
         self._pending.clear()
+        for pending in self._pending_sync.values():
+            if not pending.future.done():
+                pending.future.cancel()
+        self._pending_sync.clear()
+        for task in tuple(self._sync_tasks):
+            task.cancel()
+        self._sync_tasks.clear()
 
     @callback
     def async_add_listener(
@@ -435,12 +501,21 @@ class MeshCoreNocClockManager:
         )
 
     async def async_check_clock(
-        self, stable_id: str, *, fleet_run_id: str | None = None
+        self,
+        stable_id: str,
+        *,
+        fleet_run_id: str | None = None,
+        sync_operation: bool = False,
+        bypass_cooldown: bool = False,
     ) -> ClockResult:
         """Run one manual read-only clock check and await its public reply."""
         supplied_identifier = stable_id
         target = self.resolve_target(supplied_identifier)
         stable_id = target.stable_id
+        if not sync_operation and target.pubkey_prefix.lower() in self._pending_sync:
+            raise ClockCheckInProgressError(
+                f"A clock synchronization is already pending for {stable_id}"
+            )
         if stable_id in self._fleet_reserved_ids and fleet_run_id != self._fleet_run_id:
             raise ClockCheckFleetCollisionError(
                 f"{stable_id!r} is queued or running in fleet clock run "
@@ -454,7 +529,8 @@ class MeshCoreNocClockManager:
         now_monotonic = self._monotonic()
         last_request = self._last_request_monotonic.get(prefix)
         if (
-            last_request is not None
+            not bypass_cooldown
+            and last_request is not None
             and now_monotonic - last_request < self.cooldown_seconds
         ):
             remaining = self.cooldown_seconds - (now_monotonic - last_request)
@@ -556,6 +632,203 @@ class MeshCoreNocClockManager:
         finally:
             self._pending.pop(prefix, None)
 
+    async def async_sync_repeater_clock(self, repeater_id: str) -> ClockSyncResult:
+        """Synchronize one managed repeater and verify it with read-only checks."""
+        started_at = self._utc_now()
+        try:
+            target = self.resolve_target(repeater_id)
+        except UnknownManagedRepeaterError as err:
+            return ClockSyncResult(
+                stable_id=repeater_id,
+                pubkey_prefix=None,
+                result=ClockSyncState.UNRESOLVED,
+                started_at=started_at,
+                completed_at=self._utc_now(),
+                duration_seconds=0.0,
+                error=str(err),
+            )
+
+        prefix = target.pubkey_prefix.lower()
+        if prefix in self._pending_sync or prefix in self._pending:
+            return ClockSyncResult(
+                stable_id=target.stable_id,
+                pubkey_prefix=target.pubkey_prefix,
+                result=ClockSyncState.FAILED,
+                started_at=started_at,
+                completed_at=self._utc_now(),
+                duration_seconds=0.0,
+                error="another clock operation is already running for this repeater",
+            )
+
+        task = asyncio.current_task()
+        if task is not None:
+            self._sync_tasks.add(task)
+        result_state = self._results[target.stable_id]
+        result_state.sync_running = True
+        result_state.last_sync_error = None
+        result_state.last_sync_response = None
+        self._notify(target.stable_id)
+        response = ClockSyncResult(
+            stable_id=target.stable_id,
+            pubkey_prefix=target.pubkey_prefix,
+            result=ClockSyncState.FAILED,
+            started_at=started_at,
+        )
+
+        try:
+            try:
+                pre_check = await self.async_check_clock(
+                    target.stable_id,
+                    sync_operation=True,
+                    bypass_cooldown=True,
+                )
+            except ClockManagerError as err:
+                return self._finish_sync(
+                    response, ClockSyncState.COMMAND_FAILED, str(err)
+                )
+            if pre_check.state is not ClockCheckState.COMPLETED:
+                return self._finish_sync(
+                    response,
+                    ClockSyncState.COMMAND_FAILED,
+                    f"pre-sync clock check failed: {pre_check.error or pre_check.state}",
+                )
+            response.pre_sync_offset_seconds = pre_check.clock_offset_seconds
+            result_state.offset_before_sync_seconds = pre_check.clock_offset_seconds
+
+            future: asyncio.Future[str] = asyncio.get_running_loop().create_future()
+            pending = _PendingClockSync(
+                target=target,
+                started_at=self._utc_now(),
+                future=future,
+            )
+            self._pending_sync[prefix] = pending
+            command = f'send_cmd {target.pubkey_prefix} "clock sync"'
+            _LOGGER.debug(
+                "Dispatching managed repeater clock sync: stable_id=%s "
+                "pubkey_prefix=%s command=%s",
+                target.stable_id,
+                target.pubkey_prefix,
+                command,
+            )
+            if not self.hass.services.has_service(MESHCORE_DOMAIN, "execute_command"):
+                return self._finish_sync(
+                    response,
+                    ClockSyncState.COMMAND_FAILED,
+                    "meshcore.execute_command unavailable",
+                )
+            try:
+                service_response = await self.hass.services.async_call(
+                    MESHCORE_DOMAIN,
+                    "execute_command",
+                    {"command": command},
+                    blocking=True,
+                    return_response=True,
+                )
+            except (HomeAssistantError, ServiceNotFound) as err:
+                return self._finish_sync(
+                    response, ClockSyncState.COMMAND_FAILED, str(err)
+                )
+            except Exception as err:  # noqa: BLE001 - service boundary
+                return self._finish_sync(
+                    response,
+                    ClockSyncState.COMMAND_FAILED,
+                    f"service call failed: {err}",
+                )
+            if not isinstance(service_response, dict) or service_response.get("error"):
+                return self._finish_sync(
+                    response,
+                    ClockSyncState.COMMAND_FAILED,
+                    "MeshCore clock-sync transmission was not accepted",
+                )
+
+            try:
+                async with asyncio.timeout(self.timeout_seconds):
+                    remote_text = await future
+            except TimeoutError:
+                return self._finish_sync(
+                    response,
+                    ClockSyncState.TIMEOUT,
+                    "clock sync response timed out",
+                )
+
+            response.remote_response_text = remote_text
+            result_state.last_sync_response = remote_text
+            if remote_text == "ERR: clock cannot go backwards":
+                return self._finish_sync(
+                    response,
+                    ClockSyncState.ALREADY_AHEAD,
+                    "repeater clock cannot move backwards",
+                )
+            lowered = remote_text.casefold()
+            if (
+                "unauthorized" in lowered
+                or "permission" in lowered
+                or "auth" in lowered
+            ):
+                return self._finish_sync(
+                    response,
+                    ClockSyncState.UNAUTHORIZED,
+                    remote_text,
+                )
+
+            try:
+                post_check = await self.async_check_clock(
+                    target.stable_id,
+                    sync_operation=True,
+                    bypass_cooldown=True,
+                )
+            except ClockManagerError as err:
+                return self._finish_sync(
+                    response, ClockSyncState.VERIFICATION_FAILED, str(err)
+                )
+            if post_check.state is not ClockCheckState.COMPLETED:
+                return self._finish_sync(
+                    response,
+                    ClockSyncState.VERIFICATION_FAILED,
+                    f"post-sync clock check failed: {post_check.error or post_check.state}",
+                )
+            response.post_sync_offset_seconds = post_check.clock_offset_seconds
+            result_state.offset_after_sync_seconds = post_check.clock_offset_seconds
+            return self._finish_sync(response, ClockSyncState.SUCCESS)
+        except asyncio.CancelledError:
+            return self._finish_sync(
+                response, ClockSyncState.CANCELLED, "clock sync cancelled"
+            )
+        except Exception as err:  # noqa: BLE001 - bounded operation boundary
+            return self._finish_sync(response, ClockSyncState.FAILED, str(err))
+        finally:
+            self._pending_sync.pop(prefix, None)
+            result_state.sync_running = False
+            self._notify(target.stable_id)
+            if task is not None:
+                self._sync_tasks.discard(task)
+
+    def _finish_sync(
+        self,
+        response: ClockSyncResult,
+        result: ClockSyncState,
+        error: str | None = None,
+    ) -> ClockSyncResult:
+        """Complete and publish one synchronization result."""
+        completed_at = self._utc_now()
+        response.result = result
+        response.completed_at = completed_at
+        response.duration_seconds = max(
+            0.0, round((completed_at - response.started_at).total_seconds(), 3)
+        )
+        response.error = error
+        state = self._results.get(response.stable_id)
+        if state is not None:
+            state.last_sync_result = result
+            state.last_sync_time = completed_at
+            state.sync_duration_seconds = response.duration_seconds
+            state.last_sync_response = response.remote_response_text
+            state.last_sync_error = error
+            state.offset_before_sync_seconds = response.pre_sync_offset_seconds
+            state.offset_after_sync_seconds = response.post_sync_offset_seconds
+            self._notify(response.stable_id)
+        return response
+
     @callback
     def _async_handle_raw_event(self, event: Event) -> None:
         """Process only public CONTACT_MSG_RECV events."""
@@ -566,6 +839,26 @@ class MeshCoreNocClockManager:
         if not isinstance(payload, dict):
             return
         pubkey_prefix = str(payload.get("pubkey_prefix", "")).lower()
+        pending_sync = self._pending_sync.get(pubkey_prefix)
+        if pending_sync is not None and not pending_sync.future.done():
+            event_timestamp = data.get("timestamp")
+            text = payload.get("text")
+            if (
+                isinstance(event_timestamp, (int, float))
+                and not isinstance(event_timestamp, bool)
+                and event_timestamp >= pending_sync.started_at.timestamp()
+                and isinstance(text, str)
+                and (
+                    text == "OK - clock set"
+                    or text.startswith("OK - clock set:")
+                    or text == "ERR: clock cannot go backwards"
+                    or "unauthorized" in text.casefold()
+                    or "permission" in text.casefold()
+                    or "auth" in text.casefold()
+                )
+            ):
+                pending_sync.future.set_result(text)
+            return
         pending = self._pending.get(pubkey_prefix)
         if pending is None or pending.future.done():
             return

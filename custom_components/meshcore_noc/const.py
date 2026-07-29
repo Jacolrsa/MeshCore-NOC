@@ -8,7 +8,7 @@ DOMAIN: Final = "meshcore_noc"
 MESHCORE_DOMAIN: Final = "meshcore"
 MESHCORE_RAW_EVENT: Final = "meshcore_raw_event"
 INTEGRATION_NAME: Final = "MeshCore NOC"
-INTEGRATION_VERSION: Final = "1.0.0"
+INTEGRATION_VERSION: Final = "1.1.0-dev"
 
 PLATFORMS: Final = (
     Platform.SENSOR,
@@ -57,6 +57,7 @@ MIN_FLEET_FAILURE_DELAY: Final = 0
 MAX_FLEET_FAILURE_DELAY: Final = 600
 DEFAULT_FLEET_ROTATING_START: Final = False
 SERVICE_CHECK_CLOCK: Final = "check_clock"
+SERVICE_SYNC_REPEATER_CLOCK: Final = "sync_repeater_clock"
 SERVICE_CHECK_ALL_CLOCKS: Final = "check_all_clocks"
 SERVICE_CANCEL_CLOCK_CHECK: Final = "cancel_clock_check"
 UPDATE_CHANNEL_STABLE: Final = "stable"

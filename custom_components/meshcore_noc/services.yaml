@@ -8,6 +8,16 @@ check_clock:
       required: true
       selector:
         text:
+sync_repeater_clock:
+  name: Synchronize repeater clock
+  description: Synchronize one managed repeater to the connected MeshCore companion clock and verify the result.
+  fields:
+    repeater_id:
+      name: Managed repeater ID
+      description: NOC stable identifier of one currently managed, addressable repeater. Friendly names are display-only; the runtime UI supplies valid choices.
+      required: true
+      selector:
+        text:
 check_all_clocks:
   name: Check all clocks
   description: Start one serialized clock check for every managed, addressable repeater.

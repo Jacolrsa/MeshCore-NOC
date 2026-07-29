@@ -10,6 +10,16 @@
         }
       }
     },
+    "sync_repeater_clock": {
+      "name": "Synchronize repeater clock",
+      "description": "Synchronize one managed repeater to the connected MeshCore companion clock and verify the result.",
+      "fields": {
+        "repeater_id": {
+          "name": "Managed repeater",
+          "description": "NOC stable identifier. Friendly names are display-only."
+        }
+      }
+    },
     "check_all_clocks": {
       "name": "Check all clocks",
       "description": "Start one serialized clock check for every managed, addressable repeater.",

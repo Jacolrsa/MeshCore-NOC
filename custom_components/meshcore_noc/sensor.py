@@ -212,6 +212,14 @@ class _MeshCoreNocClockSensor(MeshCoreNocEntity, SensorEntity):
             "last_clock_attempt": result.last_clock_attempt,
             "last_clock_attempt_outcome": result.last_clock_attempt_outcome,
             "last_clock_attempt_error": result.last_clock_attempt_error,
+            "last_sync_result": result.last_sync_result,
+            "last_sync_time": result.last_sync_time,
+            "offset_before_sync_seconds": result.offset_before_sync_seconds,
+            "offset_after_sync_seconds": result.offset_after_sync_seconds,
+            "sync_duration_seconds": result.sync_duration_seconds,
+            "last_sync_response": result.last_sync_response,
+            "last_sync_error": result.last_sync_error,
+            "sync_running": result.sync_running,
             "clock_data_age_seconds": self.clock_manager.clock_data_age_seconds(
                 result.stable_id
             ),

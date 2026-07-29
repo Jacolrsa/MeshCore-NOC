@@ -2,6 +2,8 @@
 
 from types import SimpleNamespace
 
+import pytest
+import voluptuous as vol
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import service as service_helper
 
@@ -91,13 +93,21 @@ async def test_service_selector_values_match_accepted_stable_ids(
     options = descriptions[DOMAIN]["check_clock"]["fields"]["stable_id"]["selector"][
         "select"
     ]["options"]
+    sync_options = descriptions[DOMAIN]["sync_repeater_clock"]["fields"]["repeater_id"][
+        "selector"
+    ]["select"]["options"]
 
     assert options == [{"value": "01c1a4fa32c6", "label": "Laguna2"}]
+    assert sync_options == options
+    assert hass.services.has_service(DOMAIN, "sync_repeater_clock")
     target = manager.resolve_target(options[0]["value"])
     assert target.stable_id == "01c1a4fa32c6"
     assert target.pubkey_prefix == "01c1a4fa32c6"
     assert descriptions[DOMAIN]["check_all_clocks"]["fields"] == {}
     assert descriptions[DOMAIN]["cancel_clock_check"]["fields"] == {}
+    service = hass.services.async_services()[DOMAIN]["sync_repeater_clock"]
+    with pytest.raises(vol.Invalid, match="repeater_id"):
+        service.schema({})
     fleet.async_stop()
 
 

@@ -44,6 +44,7 @@ from .const import (
     SERVICE_CANCEL_CLOCK_CHECK,
     SERVICE_CHECK_ALL_CLOCKS,
     SERVICE_CHECK_CLOCK,
+    SERVICE_SYNC_REPEATER_CLOCK,
 )
 from .coordinator import MeshCoreNocCoordinator
 from .dashboard import DashboardSetupResult, async_setup_dashboard
@@ -227,6 +228,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: MeshCoreNocConfigEntry) 
     entry.async_on_unload(fleet_clock_orchestrator.async_stop)
     for service_name in (
         SERVICE_CHECK_CLOCK,
+        SERVICE_SYNC_REPEATER_CLOCK,
         SERVICE_CHECK_ALL_CLOCKS,
         SERVICE_CANCEL_CLOCK_CHECK,
     ):
@@ -429,6 +431,10 @@ def _async_register_clock_services(
         result = await manager.async_check_clock(call.data["stable_id"])
         return result.as_dict()
 
+    async def async_sync_repeater_clock(call: ServiceCall) -> dict[str, object]:
+        result = await manager.async_sync_repeater_clock(call.data["repeater_id"])
+        return result.as_dict()
+
     async def async_check_all_clocks(_call: ServiceCall) -> dict[str, object]:
         return fleet.async_start_run(FleetClockTrigger.MANUAL)
 
@@ -440,6 +446,13 @@ def _async_register_clock_services(
         SERVICE_CHECK_CLOCK,
         async_check_clock,
         schema=vol.Schema({vol.Required("stable_id"): cv.string}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SYNC_REPEATER_CLOCK,
+        async_sync_repeater_clock,
+        schema=vol.Schema({vol.Required("repeater_id"): cv.string}),
         supports_response=SupportsResponse.ONLY,
     )
     hass.services.async_register(
@@ -502,6 +515,41 @@ def _async_register_clock_services(
                 "addressable repeater."
             ),
             "fields": {},
+        },
+    )
+    service_helper.async_set_service_schema(
+        hass,
+        DOMAIN,
+        SERVICE_SYNC_REPEATER_CLOCK,
+        {
+            "name": "Synchronize repeater clock",
+            "description": (
+                "Synchronize one managed repeater to the connected MeshCore "
+                "companion clock, then verify the result."
+            ),
+            "fields": {
+                "repeater_id": {
+                    "name": "Managed repeater",
+                    "description": (
+                        "NOC stable identifier. Friendly names are display-only."
+                    ),
+                    "required": True,
+                    "selector": {
+                        "select": {
+                            "options": [
+                                {
+                                    "value": target.stable_id,
+                                    "label": target.label,
+                                }
+                                for target in sorted(
+                                    manager.targets.values(),
+                                    key=lambda item: item.label.casefold(),
+                                )
+                            ]
+                        }
+                    },
+                }
+            },
         },
     )
     service_helper.async_set_service_schema(

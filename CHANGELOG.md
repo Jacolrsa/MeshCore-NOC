@@ -5,6 +5,19 @@ All notable changes to MeshCore NOC will be documented in this file.
 The format is based on Keep a Changelog, and versioning follows Semantic
 Versioning.
 
+## [1.1.0-dev]
+
+### Added
+
+- Backend-only `meshcore_noc.sync_repeater_clock` action for one managed
+  repeater, with read-before-sync, asynchronous remote-result correlation, and
+  read-after-sync verification.
+
+### Changed
+
+- Corrected Clock Intelligence documentation to describe the source-backed
+  authenticated `clock sync` command and its forward-only behavior.
+
 ## [1.0.0] - 2026-07-28
 
 First clean public release of MeshCore NOC.

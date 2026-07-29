@@ -192,27 +192,47 @@ readings and run state are not restored after restart.
 Phase 2 does not set clocks, reboot repeaters, send alerts, or perform automatic
 correction.
 
-## Fleet Clock Sync upstream capability gap
+## Single-repeater clock synchronization
 
-Remote clock reading is supported through:
+MeshCore firmware supports remote repeater clock synchronization through the
+literal authenticated CLI command `clock sync`. The timestamp is carried in
+the CLI message envelope rather than as a command argument. The connected
+MeshCore companion replaces the application-supplied timestamp with its own
+RTC value before transmitting the command, so the companion RTC is the
+reference clock.
 
-```text
-meshcore.execute_command -> send_cmd <repeater> "clock"
+MeshCore NOC exposes only a bounded single-repeater action in this development
+slice:
+
+```yaml
+action: meshcore_noc.sync_repeater_clock
+data:
+  repeater_id: "<managed repeater id>"
 ```
 
-Local companion time setting is supported through:
+The operation verifies reachability with the existing read-only clock check,
+sends `clock sync`, waits for the exact repeater's asynchronous
+`CONTACT_MSG_RECV`, and performs a second read-only clock check after a
+successful response. The low-level equivalent is:
 
-```text
-set_time(epoch)
+```yaml
+action: meshcore.execute_command
+data:
+  command: 'send_cmd <exact-prefix> "clock sync"'
 ```
 
-Remote repeater time setting is not currently exposed through `meshcore_py` or
-the Home Assistant MeshCore integration. The firmware `time <epoch>` command
-is serial-only. `clkreboot` is not a clock synchronisation mechanism.
+The low-level action confirms only that the connected companion accepted the
+transmission. Remote success is established only by a matching response of
+`OK - clock set` or `OK - clock set: ...`. Synchronization is forward-only:
+`ERR: clock cannot go backwards` is reported as `already_ahead` and is not
+success. MeshCore NOC never sends a password, calls local `set_time`, or uses
+`clkreboot`.
 
-Fleet Clock Sync must remain disabled until upstream provides a documented,
-remotely addressable clock-set operation with response, authentication,
-timeout, and error semantics.
+Companion time readiness is a known limitation: the upstream Home Assistant
+integration synchronizes the local companion during connection, but it does
+not expose a public readiness signal that MeshCore NOC can verify directly.
+Fleet synchronization remains deferred until this single-repeater path
+succeeds in live testing.
 
 ## Goals
 
