@@ -1,8 +1,8 @@
-/* MeshCore NOC clock-sync UX patch. Loaded after the bundled dashboard. */
+/* MeshCore NOC beta8 clock/password UX patch. Loaded after the bundled dashboard. */
 (() => {
   "use strict";
 
-  const PATCH_MARKER = "__meshcoreNocClockSyncUxPatch";
+  const PATCH_MARKER = "__meshcoreNocClockSyncUxPatchBeta8";
   if (globalThis[PATCH_MARKER]) return;
   globalThis[PATCH_MARKER] = true;
 
@@ -28,27 +28,25 @@
       (panel) => panel.querySelector("h2")?.textContent?.trim() === heading,
     ) || null;
 
-  const replaceClockSourceWarning = (root) => {
-    for (const node of root?.querySelectorAll?.(".source-warning,.clock-health.warning") || []) {
-      if (node.textContent?.includes("connected MeshCore companion clock"))
-        node.textContent =
-          "Clock synchronisation uses the Home Assistant UTC system clock. Home Assistant should have working internet/NTP time synchronisation.";
-    }
-    return root;
-  };
+  const metricByLabel = (panel, label) =>
+    Array.from(panel?.querySelectorAll?.(".detail-metric") || []).find((metric) => {
+      const firstText = Array.from(metric.childNodes || []).find(
+        (node) => node.nodeType === Node.TEXT_NODE && node.nodeValue?.trim(),
+      );
+      return firstText?.nodeValue?.trim() === label;
+    }) || null;
 
   const install = async () => {
     if (typeof customElements === "undefined") return;
     await customElements.whenDefined("meshcore-noc-overview-card");
     const Card = customElements.get("meshcore-noc-overview-card");
-    if (!Card || Card.prototype.__clockSyncUxPatched) return;
-    Card.prototype.__clockSyncUxPatched = true;
+    if (!Card || Card.prototype.__clockSyncUxPatchedBeta8) return;
+    Card.prototype.__clockSyncUxPatchedBeta8 = true;
 
     const originalDetailView = Card.prototype._detailView;
-    const originalCombinedHeader = Card.prototype._combinedHeader;
-    const originalFleetClockSection = Card.prototype._fleetClockSection;
     const originalHandleAction = Card.prototype._handleAction;
     const originalManagementAction = Card.prototype._handleManagementAction;
+    const originalCombinedHeader = Card.prototype._combinedHeader;
 
     Card.prototype._ensureClockSyncPatchStyle = function () {
       if (!this.shadowRoot || this.shadowRoot.querySelector("style[data-clock-sync-patch]"))
@@ -69,16 +67,19 @@
     };
 
     Card.prototype._combinedHeader = function (...args) {
-      return replaceClockSourceWarning(originalCombinedHeader.call(this, ...args));
-    };
-
-    Card.prototype._fleetClockSection = function (...args) {
-      return replaceClockSourceWarning(originalFleetClockSection.call(this, ...args));
+      const header = originalCombinedHeader.call(this, ...args);
+      const warning = header?.querySelector?.(".source-warning");
+      if (warning)
+        warning.textContent =
+          "Repeater clock synchronisation uses Home Assistant UTC time as the authoritative source.";
+      return header;
     };
 
     Card.prototype._detailView = function (...args) {
       const fragment = originalDetailView.call(this, ...args);
       const repeater = args[0];
+      const checkMetrics = args[3] || {};
+      const syncMetrics = args[4] || {};
       if (!repeater) return fragment;
       this._ensureClockSyncPatchStyle();
 
@@ -87,8 +88,36 @@
       if (clockPanel && accessPanel && clockPanel.parentNode === accessPanel.parentNode)
         clockPanel.after(accessPanel);
 
+      const passwordInput = accessPanel?.querySelector?.("[data-password-input]");
+      if (passwordInput) {
+        passwordInput.type = "text";
+        passwordInput.autocomplete = "off";
+        passwordInput.placeholder = "Enter repeater administrator password";
+      }
+
       if (!clockPanel) return fragment;
       const settings = this._managementFor(repeater.stableId);
+      const clockState = this._hass?.states?.[repeater.entities.clockStatus];
+      const attributes = clockState?.attributes || {};
+
+      const startupQueued =
+        String(attributes.request_state || "").toLowerCase() === "queued" &&
+        !attributes.last_clock_attempt &&
+        !attributes.sync_running;
+      if (startupQueued && !checkMetrics.active && !syncMetrics.active) {
+        for (const button of clockPanel.querySelectorAll("button")) {
+          const label = button.textContent?.trim();
+          if (["Check this repeater", "Sync this repeater"].includes(label))
+            button.disabled = false;
+        }
+        const operation = metricByLabel(clockPanel, "Operation");
+        const value = operation?.querySelector("b");
+        if (value) {
+          value.textContent = "Idle";
+          value.className = "";
+        }
+      }
+
       const accessState = this._element(
         "div",
         `sync-access-state ${settings.password_configured ? "healthy" : "warning"}`,
@@ -98,8 +127,6 @@
       );
       clockPanel.append(accessState);
 
-      const clockState = this._hass?.states?.[repeater.entities.clockStatus];
-      const attributes = clockState?.attributes || {};
       const transcript = String(attributes.last_sync_response || "").trim();
       if (transcript) {
         const log = this._element(
@@ -208,7 +235,7 @@
         this._managementMessages.set(stableId, {
           text:
             action === "password-save"
-              ? "Password saved. Clock synchronisation can now authenticate to this repeater."
+              ? "Password saved. It will be checked only when an administrator operation needs to log in to the repeater."
               : "Repeater password removed. Clock synchronisation will require a password before it can run.",
           error: false,
         });
@@ -223,10 +250,10 @@
       }
     };
 
-    console.info("MeshCore NOC clock-sync UX patch loaded");
+    console.info("MeshCore NOC beta8 clock/password UX patch loaded");
   };
 
   install().catch((error) =>
-    console.error("MeshCore NOC clock-sync UX patch failed", error),
+    console.error("MeshCore NOC beta8 clock/password UX patch failed", error),
   );
 })();
