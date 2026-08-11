@@ -5,6 +5,37 @@ All notable changes to MeshCore NOC will be documented in this file.
 The format is based on Keep a Changelog, and versioning follows Semantic
 Versioning.
 
+## [1.1.0-beta7]
+
+### Added
+
+- Authenticated repeater clock synchronisation that uses the Home Assistant UTC
+  system clock instead of copying the connected MeshCore companion clock.
+- Safe operator-visible clock-sync activity lines on each repeater detail page.
+- Explicit repeater-password requirement and clearer password save failures.
+
+### Changed
+
+- Clock synchronisation now logs in to the repeater, sends `clkreboot`, waits
+  10 seconds for reboot, logs in again, sends `time <epoch_seconds>` from Home
+  Assistant UTC, waits another 10 seconds, and performs a final `clock` check.
+- The Repeater access section is displayed immediately beside the repeater clock
+  workflow so credentials are configured before an authenticated operation.
+- Any remote response received while setting time is retained in the operator
+  sync transcript without exposing the stored password.
+
+### Security
+
+- Repeater passwords remain private backend-only values and are never included
+  in entities, diagnostics, command transcripts, or logs.
+
+## [1.1.0-beta6]
+
+### Fixed
+
+- Allowed the dashboard's single-repeater clock-sync action to call the Home
+  Assistant service without explicitly requesting a structured response.
+
 ## [1.1.0-beta5]
 
 ### Added
