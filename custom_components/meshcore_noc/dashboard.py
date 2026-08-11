@@ -24,6 +24,8 @@ DASHBOARD_ICON = "mdi:access-point-network"
 STRATEGY_TYPE = "custom:meshcore-noc"
 STATIC_URL = "/api/meshcore_noc/frontend/meshcore-noc-dashboard.js"
 RESOURCE_URL = f"{STATIC_URL}?v={INTEGRATION_VERSION}"
+PATCH_STATIC_URL = "/api/meshcore_noc/frontend/meshcore-noc-dashboard-patch.js"
+PATCH_RESOURCE_URL = f"{PATCH_STATIC_URL}?v={INTEGRATION_VERSION}"
 
 _FRONTEND_REGISTERED = "dashboard_frontend_registered"
 _STATIC_PATH_REGISTERED = "dashboard_static_path_registered"
@@ -54,10 +56,10 @@ async def async_setup_dashboard(hass: HomeAssistant) -> DashboardSetupResult:
 
 
 async def _async_register_frontend(hass: HomeAssistant) -> bool:
-    """Serve the bundle and persist it as a globally loaded Lovelace module."""
+    """Serve the bundle and persist its Lovelace modules globally."""
     domain_data = hass.data.setdefault(DOMAIN, {})
     if domain_data.get(_FRONTEND_REGISTERED):
-        _LOGGER.debug("MeshCore NOC frontend module resource already registered")
+        _LOGGER.debug("MeshCore NOC frontend module resources already registered")
         return True
 
     if not await async_setup_component(hass, "frontend", {}):
@@ -65,18 +67,27 @@ async def _async_register_frontend(hass: HomeAssistant) -> bool:
         return False
 
     if not domain_data.get(_STATIC_PATH_REGISTERED):
-        frontend_file = Path(__file__).parent / "frontend" / "meshcore-noc-dashboard.js"
+        frontend_dir = Path(__file__).parent / "frontend"
         await hass.http.async_register_static_paths(
             [
                 StaticPathConfig(
                     STATIC_URL,
-                    str(frontend_file),
+                    str(frontend_dir / "meshcore-noc-dashboard.js"),
                     cache_headers=True,
-                )
+                ),
+                StaticPathConfig(
+                    PATCH_STATIC_URL,
+                    str(frontend_dir / "meshcore-noc-dashboard-patch.js"),
+                    cache_headers=True,
+                ),
             ]
         )
         domain_data[_STATIC_PATH_REGISTERED] = True
-        _LOGGER.info("MeshCore NOC dashboard static path registered: %s", STATIC_URL)
+        _LOGGER.info(
+            "MeshCore NOC dashboard static paths registered: %s, %s",
+            STATIC_URL,
+            PATCH_STATIC_URL,
+        )
 
     if "lovelace" not in hass.data:
         await async_setup_component(hass, "lovelace", {})
@@ -89,38 +100,47 @@ async def _async_register_frontend(hass: HomeAssistant) -> bool:
     if resources is None or not hasattr(resources, "async_create_item"):
         _LOGGER.warning(
             "MeshCore NOC Lovelace resource collection is unavailable; "
-            "the served file alone is not a frontend loader"
+            "the served files alone are not a frontend loader"
         )
         return False
 
     try:
         if hasattr(resources, "async_get_info"):
             await resources.async_get_info()
-        existing = next(
-            (
-                item
-                for item in resources.async_items()
-                if _resource_base_url(item.get("url")) == STATIC_URL
-            ),
-            None,
-        )
-        if existing is None:
-            await resources.async_create_item(
-                {"res_type": "module", "url": RESOURCE_URL}
+        for static_url, resource_url in (
+            (STATIC_URL, RESOURCE_URL),
+            (PATCH_STATIC_URL, PATCH_RESOURCE_URL),
+        ):
+            existing = next(
+                (
+                    item
+                    for item in resources.async_items()
+                    if _resource_base_url(item.get("url")) == static_url
+                ),
+                None,
             )
-            _LOGGER.info(
-                "MeshCore NOC Lovelace module resource created: %s", RESOURCE_URL
-            )
-        elif existing.get("url") != RESOURCE_URL or existing.get("type") != "module":
-            await resources.async_update_item(
-                existing["id"],
-                {"res_type": "module", "url": RESOURCE_URL},
-            )
-            _LOGGER.info(
-                "MeshCore NOC Lovelace module resource updated: %s", RESOURCE_URL
-            )
-        else:
-            _LOGGER.debug("MeshCore NOC Lovelace module resource already registered")
+            if existing is None:
+                await resources.async_create_item(
+                    {"res_type": "module", "url": resource_url}
+                )
+                _LOGGER.info(
+                    "MeshCore NOC Lovelace module resource created: %s",
+                    resource_url,
+                )
+            elif existing.get("url") != resource_url or existing.get("type") != "module":
+                await resources.async_update_item(
+                    existing["id"],
+                    {"res_type": "module", "url": resource_url},
+                )
+                _LOGGER.info(
+                    "MeshCore NOC Lovelace module resource updated: %s",
+                    resource_url,
+                )
+            else:
+                _LOGGER.debug(
+                    "MeshCore NOC Lovelace module resource already registered: %s",
+                    resource_url,
+                )
     except (HomeAssistantError, vol.Invalid, KeyError, RuntimeError, ValueError) as err:
         _LOGGER.warning(
             "MeshCore NOC Lovelace module resource registration failed: %s", err
@@ -129,7 +149,7 @@ async def _async_register_frontend(hass: HomeAssistant) -> bool:
 
     domain_data[_FRONTEND_REGISTERED] = True
     _LOGGER.info(
-        "MeshCore NOC frontend loading mechanism selected: Lovelace module resource"
+        "MeshCore NOC frontend loading mechanism selected: Lovelace module resources"
     )
     return True
 
