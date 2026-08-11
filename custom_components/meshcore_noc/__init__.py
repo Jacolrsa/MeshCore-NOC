@@ -522,7 +522,7 @@ def _async_register_clock_services(
         SERVICE_SYNC_REPEATER_CLOCK,
         async_sync_repeater_clock,
         schema=vol.Schema({vol.Required("repeater_id"): cv.string}),
-        supports_response=SupportsResponse.ONLY,
+        supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(
         DOMAIN,
