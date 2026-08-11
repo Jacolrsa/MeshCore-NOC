@@ -151,6 +151,24 @@ queue task, and calculate a fresh next run. Optional rotating order advances
 the starting repeater after each completed run without changing configured
 managed order.
 
+### Fleet clock synchronisation
+
+The central Clock Management dashboard uses the same managed addressability map
+for fleet clock checks and synchronisation. The
+`meshcore_noc.sync_all_repeater_clocks` action snapshots all currently managed,
+addressable repeaters and processes them sequentially. One failed repeater does
+not stop the remaining queue, and check, single-sync, and fleet-sync operations
+share a concurrency gate.
+
+Automatic synchronisation is disabled by default. Supported intervals are 6,
+12, 24, 72, and 168 hours; the default is 24 hours. The integration persists
+the last terminal summary and next due time, rebuilds one timer on reload, and
+runs at most one overdue synchronization after startup.
+
+Repeaters receive the connected MeshCore companion node's clock, not Home
+Assistant's clock directly. Confirm that source clock before enabling automatic
+synchronisation.
+
 Fleet diagnostics include configuration, current run, queue, scheduler state,
 next scheduled run, skipped scheduled starts, last summary, the latest 20
 in-memory summaries, and non-addressable exclusions. Fleet entities are:
@@ -191,6 +209,48 @@ readings and run state are not restored after restart.
 
 Phase 2 does not set clocks, reboot repeaters, send alerts, or perform automatic
 correction.
+
+## Single-repeater clock synchronization
+
+MeshCore firmware supports remote repeater clock synchronization through the
+literal authenticated CLI command `clock sync`. The timestamp is carried in
+the CLI message envelope rather than as a command argument. The connected
+MeshCore companion replaces the application-supplied timestamp with its own
+RTC value before transmitting the command, so the companion RTC is the
+reference clock.
+
+MeshCore NOC exposes only a bounded single-repeater action in this development
+slice:
+
+```yaml
+action: meshcore_noc.sync_repeater_clock
+data:
+  repeater_id: "<managed repeater id>"
+```
+
+The operation verifies reachability with the existing read-only clock check,
+sends `clock sync`, waits for the exact repeater's asynchronous
+`CONTACT_MSG_RECV`, and performs a second read-only clock check after a
+successful response. The low-level equivalent is:
+
+```yaml
+action: meshcore.execute_command
+data:
+  command: 'send_cmd <exact-prefix> "clock sync"'
+```
+
+The low-level action confirms only that the connected companion accepted the
+transmission. Remote success is established only by a matching response of
+`OK - clock set` or `OK - clock set: ...`. Synchronization is forward-only:
+`ERR: clock cannot go backwards` is reported as `already_ahead` and is not
+success. MeshCore NOC never sends a password, calls local `set_time`, or uses
+`clkreboot`.
+
+Companion time readiness is a known limitation: the upstream Home Assistant
+integration synchronizes the local companion during connection, but it does
+not expose a public readiness signal that MeshCore NOC can verify directly.
+Fleet synchronization remains deferred until this single-repeater path
+succeeds in live testing.
 
 ## Goals
 

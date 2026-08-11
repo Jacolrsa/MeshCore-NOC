@@ -5,8 +5,11 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from custom_components.meshcore_noc.const import INTEGRATION_VERSION
 from custom_components.meshcore_noc.dashboard import (
     DASHBOARD_URL_PATH,
+    PATCH_RESOURCE_URL,
+    PATCH_STATIC_URL,
     RESOURCE_URL,
     STATIC_URL,
     STRATEGY_TYPE,
@@ -69,7 +72,7 @@ class FakeResources:
 
 @pytest.mark.asyncio
 async def test_frontend_registration_is_cache_safe(monkeypatch):
-    """The static path and global Lovelace module are registered once."""
+    """Both dashboard modules and static paths are registered once."""
     resources = FakeResources()
     hass = Mock()
     hass.data = {"lovelace": {"resources": resources}}
@@ -83,22 +86,28 @@ async def test_frontend_registration_is_cache_safe(monkeypatch):
     assert await _async_register_frontend(hass)
     assert await _async_register_frontend(hass)
 
-    registration = hass.http.async_register_static_paths.call_args.args[0][0]
-    assert registration.url_path == STATIC_URL
-    assert Path(registration.path).name == "meshcore-noc-dashboard.js"
-    assert Path(registration.path).is_file()
-    assert registration.cache_headers
-    assert RESOURCE_URL.startswith(f"{STATIC_URL}?v=")
-    assert RESOURCE_URL.endswith("?v=1.0.0")
-    resources.async_create_item.assert_awaited_once_with(
-        {"res_type": "module", "url": RESOURCE_URL}
-    )
+    registrations = hass.http.async_register_static_paths.call_args.args[0]
+    assert [registration.url_path for registration in registrations] == [
+        STATIC_URL,
+        PATCH_STATIC_URL,
+    ]
+    assert Path(registrations[0].path).name == "meshcore-noc-dashboard.js"
+    assert Path(registrations[1].path).name == "meshcore-noc-dashboard-patch.js"
+    assert all(Path(registration.path).is_file() for registration in registrations)
+    assert all(registration.cache_headers for registration in registrations)
+    assert RESOURCE_URL.endswith(f"?v={INTEGRATION_VERSION}")
+    assert PATCH_RESOURCE_URL.endswith(f"?v={INTEGRATION_VERSION}")
+    assert [item["url"] for item in resources.async_items()] == [
+        RESOURCE_URL,
+        PATCH_RESOURCE_URL,
+    ]
+    assert resources.async_create_item.await_count == 2
     setup_component.assert_awaited_once_with(hass, "frontend", {})
 
 
 @pytest.mark.asyncio
 async def test_module_registration_updates_old_query_without_duplicate(monkeypatch):
-    """An existing Alpha4 resource is updated instead of duplicated."""
+    """The old base resource is updated and the new patch is added once."""
     resources = FakeResources(
         [{"id": "old", "type": "module", "url": f"{STATIC_URL}?v=4.0.0-alpha4.1"}]
     )
@@ -112,18 +121,20 @@ async def test_module_registration_updates_old_query_without_duplicate(monkeypat
 
     assert await _async_register_frontend(hass)
 
-    resources.async_create_item.assert_not_awaited()
     resources.async_update_item.assert_awaited_once_with(
         "old", {"res_type": "module", "url": RESOURCE_URL}
     )
-    assert len(resources.async_items()) == 1
+    resources.async_create_item.assert_awaited_once_with(
+        {"res_type": "module", "url": PATCH_RESOURCE_URL}
+    )
+    assert len(resources.async_items()) == 2
 
 
 @pytest.mark.asyncio
 async def test_module_registration_retries_without_duplicate_static_path(monkeypatch):
     """A temporary module-registration failure can retry safely."""
     resources = FakeResources()
-    resources.async_create_item.side_effect = [RuntimeError("not ready"), None]
+    resources.async_create_item.side_effect = [RuntimeError("not ready"), None, None]
     hass = Mock()
     hass.data = {"lovelace": {"resources": resources}}
     hass.http.async_register_static_paths = AsyncMock()
@@ -136,12 +147,12 @@ async def test_module_registration_retries_without_duplicate_static_path(monkeyp
     assert await _async_register_frontend(hass)
 
     hass.http.async_register_static_paths.assert_awaited_once()
-    assert resources.async_create_item.await_count == 2
+    assert resources.async_create_item.await_count == 3
 
 
 @pytest.mark.asyncio
 async def test_served_file_without_global_loader_is_failure(monkeypatch):
-    """A static HTTP route alone does not count as frontend execution."""
+    """Static HTTP routes alone do not count as frontend execution."""
     hass = Mock()
     hass.data = {"lovelace": {}}
     hass.http.async_register_static_paths = AsyncMock()
@@ -233,8 +244,12 @@ async def test_resource_registration_unavailable_is_truthful(monkeypatch):
 
 
 def test_dashboard_files_are_in_update_payload():
-    """The native updater retains every dashboard runtime file."""
+    """The native updater retains the dashboard runtime files."""
     from custom_components.meshcore_noc.updater import REQUIRED_INTEGRATION_FILES
 
     assert "dashboard.py" in REQUIRED_INTEGRATION_FILES
     assert "frontend/meshcore-noc-dashboard.js" in REQUIRED_INTEGRATION_FILES
+    assert (
+        Path("custom_components/meshcore_noc/frontend/meshcore-noc-dashboard-patch.js")
+        .is_file()
+    )

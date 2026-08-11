@@ -309,6 +309,10 @@ class FleetClockOrchestrator:
             raise FleetClockAlreadyRunningError(
                 "A single-repeater clock check is already active"
             )
+        if getattr(self.clock_manager, "sync_in_progress", False):
+            raise FleetClockAlreadyRunningError(
+                "A clock synchronization is already active"
+            )
         targets = list(self.clock_manager.targets.values())
         if self.config.rotating_start and targets:
             start = self._rotation_index % len(targets)

@@ -22,6 +22,13 @@ def test_freshness_transitions_over_time(age_seconds: int, expected: str) -> Non
     assert _freshness(age_seconds, True) == expected
 
 
+def test_per_repeater_freshness_thresholds() -> None:
+    """Configured ages override defaults without changing status semantics."""
+    assert _freshness(100, True, 60, 120, 180) == "Aging"
+    assert _freshness(150, True, 60, 120, 180) == "Stale"
+    assert _freshness(180, True, 60, 120, 180) == "Offline"
+
+
 def test_unavailable_source_is_offline() -> None:
     """Availability overrides telemetry age."""
     assert _freshness(0, False) == "Offline"
@@ -46,3 +53,9 @@ def test_health_isolated_from_entity_presentation(
 ) -> None:
     """Health remains a focused replaceable calculation."""
     assert calculate_health(battery, freshness) == expected
+
+
+def test_per_repeater_battery_thresholds() -> None:
+    """Configured warning and critical values feed health consistently."""
+    assert calculate_health(29, "Fresh", 50, 30) == "Poor"
+    assert calculate_health(49, "Fresh", 50, 30) == "Fair"

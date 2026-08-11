@@ -5,7 +5,11 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.meshcore_noc.const import CONF_MANAGED_REPEATER_IDS, DOMAIN
+from custom_components.meshcore_noc.const import (
+    CONF_MANAGED_REPEATER_IDS,
+    DOMAIN,
+    INTEGRATION_VERSION,
+)
 from custom_components.meshcore_noc.diagnostics import (
     async_get_config_entry_diagnostics,
 )
@@ -336,7 +340,7 @@ async def test_diagnostics_include_alpha_2_1_runtime_fields(
     diagnostics = await async_get_config_entry_diagnostics(hass, noc_entry)
     managed = diagnostics["managed_devices"][0]
 
-    assert diagnostics["integration_version"] == "1.0.0"
+    assert diagnostics["integration_version"] == INTEGRATION_VERSION
     assert managed["coordinator"]["last_successful_update"] is not None
     assert managed["coordinator"]["last_attempted_update"] is not None
     assert managed["coordinator"]["source_listener_registered"]
@@ -519,7 +523,7 @@ async def test_eight_repeaters_keep_their_own_normalized_names(
                 if entry.entity_id.split(".", 1)[0] in {"sensor", "binary_sensor"}
             ]
         )
-        == 37
+        == 39
     )
 
 
@@ -558,7 +562,7 @@ async def test_duplicate_friendly_names_keep_stable_identity(
         for entry in entries
         if entry.entity_id.split(".", 1)[0] in {"sensor", "binary_sensor"}
     ]
-    assert len(unique_ids) == 13
+    assert len(unique_ids) == 15
     assert len(unique_ids) == len(set(unique_ids))
 
     diagnostics = await async_get_config_entry_diagnostics(hass, noc_entry)

@@ -1,26 +1,36 @@
 # MeshCore NOC Roadmap
 
-MeshCore NOC v1.0.0 is the current stable release. The roadmap is directional;
+MeshCore NOC `1.1.0` is the current stable release. The roadmap is directional;
 planned work is not part of the stable release and has no assigned dates.
 
 | Phase | Status | Focus |
 | --- | --- | --- |
 | A — Foundation | Released in 1.0.0 | Discovery, managed devices, calibrated telemetry, health, freshness, dashboard, update channels |
-| B — Professional UI | Ongoing | TV optimisation, no-scroll Mission Control, card and chart hierarchy, detail popups |
-| C — Intelligence | Planned | Prediction, charging, solar, degradation, smart alerts, trends |
-| D — Network Operations | Planned | Topology, maps, link quality, coverage, history, fleet summaries |
-| E — Version 1.0 Readiness | Released | API stability, tests, docs, translations, installation and migration |
+| B — Professional UI | Advanced in 1.1.0 | Mission Control hierarchy, fleet severity, detail management, interactive Recorder graph |
+| C — Clock Operations | Released in 1.1.0 | Password-authenticated checks, route-aware timing, latency-aware sync, companion/replay recovery, automation |
+| D — Intelligence | Planned | Prediction, charging, solar, degradation, smart alerts, trends |
+| E — Network Operations | Planned | Topology, maps, link quality, coverage, route visibility, fleet summaries |
 
-See [MH-102 — Product Roadmap](docs/MH-102_Roadmap.md) for implemented scope,
-planned capabilities, and roadmap guardrails.
+## Released in 1.1.0
 
-## v1.0 Operational Intelligence
+- Authenticated individual and fleet clock checks.
+- MeshCore route `suggested_timeout` handling for direct and multi-hop nodes.
+- RTT-compensated clock measurement.
+- Home Assistant UTC clock synchronisation with latency compensation.
+- No-write/no-reboot result for repeaters already within ±30 seconds.
+- Companion future-`lastmod` repair and repeater anti-replay recovery.
+- Automatic checks and password-guarded automatic synchronisation.
+- Persistent per-repeater calibration, thresholds, display name and private
+  administrator-password storage.
+- Fleet severity colours derived from health/freshness, battery and clock state.
+- Stable background-refresh Recorder graph with 6 h / 24 h / 7 d / 30 d ranges,
+  time labels, crosshair values and series controls.
 
-Clock Intelligence is implemented in `1.0.0`: manual
-read-only clock checks for managed repeaters, signed offset and status
-diagnostics, public Home Assistant event correlation, timeout, cooldown, and
-bounded in-memory history. Clock sync, reboot, automation, and dashboard
-controls remain future phases.
+## Next priorities
 
-See [the operational-intelligence roadmap](docs/V4_1_ROADMAP.md) for the ordered implementation
-plan.
+The next stable feature work should avoid destabilising the 1.1 clock workflow.
+Likely areas are richer battery/solar intelligence, route/topology visibility and
+further Mission Control graph/telemetry refinement.
+
+See [v1.1 release notes](docs/V1_1_RELEASE.md) and
+[MH-102 — Product Roadmap](docs/MH-102_Roadmap.md).

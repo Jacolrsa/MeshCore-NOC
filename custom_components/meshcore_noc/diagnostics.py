@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -43,6 +44,7 @@ async def async_get_config_entry_diagnostics(
     duplicate_detection = _duplicate_detection(hass, entry, active_ids)
     updater = entry.runtime_data.update_coordinator
     fleet = entry.runtime_data.fleet_clock_orchestrator
+    fleet_sync = entry.runtime_data.fleet_clock_sync_orchestrator
     retained_results = {}
     for stable_id in entry.runtime_data.clock_manager.targets:
         clock_result = entry.runtime_data.clock_manager.result_for(stable_id)
@@ -161,6 +163,10 @@ async def async_get_config_entry_diagnostics(
                     )
                 ],
             },
+            "fleet_sync": {
+                "configuration": fleet_sync.config.as_dict(),
+                **fleet_sync.state_attributes,
+            },
         },
         "reconciliation": {
             "created": list(entry.runtime_data.reconciliation.created),
@@ -246,6 +252,9 @@ def _managed_device_diagnostics(
     clock_result = coordinator.config_entry.runtime_data.clock_manager.result_for(
         coordinator.source.stable_id
     )
+    management_settings = coordinator.management_store.settings_for(
+        coordinator.source.stable_id
+    )
     return {
         "stable_id": data.stable_id,
         "managed_device": data.managed_device,
@@ -280,6 +289,7 @@ def _managed_device_diagnostics(
             "empty_voltage": data.empty_voltage,
             "full_voltage": data.full_voltage,
         },
+        "management_settings": asdict(management_settings),
         "freshness": {
             "status": data.freshness,
             "age_seconds": data.age_seconds,
