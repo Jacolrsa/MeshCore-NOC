@@ -361,7 +361,7 @@ async def websocket_reset_repeater_settings(
     _legacy_test_admin_guard(connection)
     try:
         runtime, manager = _runtime_for_stable_id(hass, msg["stable_id"])
-        result = await manager.async_reset_settings(msg["stable_id"], msg["settings"])
+        result = await manager.async_reset_settings(msg["stable_id"])
         coordinator = next(
             item
             for item in runtime.coordinators
