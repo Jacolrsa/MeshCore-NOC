@@ -1,6 +1,6 @@
 """Persistent per-repeater management settings.
 
-Passwords deliberately stay behind this module's private storage boundary.  The
+Passwords deliberately stay behind this module's private storage boundary. The
 public representation only reports whether a password is configured.
 """
 
@@ -277,20 +277,34 @@ def _send_password_storage_error(
     )
 
 
+def _legacy_test_admin_guard(connection: websocket_api.ActiveConnection) -> None:
+    """Keep direct unit-test calls compatible with older fake connections.
+
+    Home Assistant 2026 uses ``@websocket_api.require_admin``. The conditional
+    call only exists for unwrapped tests or older ActiveConnection objects that
+    still expose ``require_admin``; production authorization is handled by the
+    decorator.
+    """
+    legacy_guard = getattr(connection, "require_admin", None)
+    if callable(legacy_guard):
+        legacy_guard()
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "meshcore_noc/management/get",
         vol.Required("stable_id"): str,
     }
 )
-@websocket_api.async_response
 async def websocket_get_repeater_settings(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     """Return browser-safe settings to an administrator."""
-    connection.require_admin()
+    _legacy_test_admin_guard(connection)
     try:
         _runtime, manager = _runtime_for_stable_id(hass, msg["stable_id"])
     except RepeaterSettingsValidationError as err:
@@ -299,6 +313,8 @@ async def websocket_get_repeater_settings(
     connection.send_result(msg["id"], manager.public_settings(msg["stable_id"]))
 
 
+@websocket_api.require_admin
+@websocket_api.async_response
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "meshcore_noc/management/save",
@@ -306,14 +322,13 @@ async def websocket_get_repeater_settings(
         vol.Required("settings"): dict,
     }
 )
-@websocket_api.async_response
 async def websocket_save_repeater_settings(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     """Validate and save browser-safe settings."""
-    connection.require_admin()
+    _legacy_test_admin_guard(connection)
     try:
         runtime, manager = _runtime_for_stable_id(hass, msg["stable_id"])
         result = await manager.async_save_settings(msg["stable_id"], msg["settings"])
@@ -329,23 +344,24 @@ async def websocket_save_repeater_settings(
     connection.send_result(msg["id"], result)
 
 
+@websocket_api.require_admin
+@websocket_api.async_response
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "meshcore_noc/management/reset",
         vol.Required("stable_id"): str,
     }
 )
-@websocket_api.async_response
 async def websocket_reset_repeater_settings(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     """Reset non-secret values to defaults."""
-    connection.require_admin()
+    _legacy_test_admin_guard(connection)
     try:
         runtime, manager = _runtime_for_stable_id(hass, msg["stable_id"])
-        result = await manager.async_reset_settings(msg["stable_id"])
+        result = await manager.async_reset_settings(msg["stable_id"], msg["settings"])
         coordinator = next(
             item
             for item in runtime.coordinators
@@ -358,6 +374,8 @@ async def websocket_reset_repeater_settings(
     connection.send_result(msg["id"], result)
 
 
+@websocket_api.require_admin
+@websocket_api.async_response
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "meshcore_noc/management/set_password",
@@ -365,14 +383,13 @@ async def websocket_reset_repeater_settings(
         vol.Required("password"): str,
     }
 )
-@websocket_api.async_response
 async def websocket_set_repeater_password(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     """Replace one password without returning or logging it."""
-    connection.require_admin()
+    _legacy_test_admin_guard(connection)
     try:
         _runtime, manager = _runtime_for_stable_id(hass, msg["stable_id"])
         await manager.async_set_password(msg["stable_id"], msg["password"])
@@ -388,20 +405,21 @@ async def websocket_set_repeater_password(
     connection.send_result(msg["id"], manager.public_settings(msg["stable_id"]))
 
 
+@websocket_api.require_admin
+@websocket_api.async_response
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "meshcore_noc/management/remove_password",
         vol.Required("stable_id"): str,
     }
 )
-@websocket_api.async_response
 async def websocket_remove_repeater_password(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     """Remove one password without exposing its former value."""
-    connection.require_admin()
+    _legacy_test_admin_guard(connection)
     try:
         _runtime, manager = _runtime_for_stable_id(hass, msg["stable_id"])
         await manager.async_remove_password(msg["stable_id"])
