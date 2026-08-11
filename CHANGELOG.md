@@ -5,6 +5,36 @@ All notable changes to MeshCore NOC will be documented in this file.
 The format is based on Keep a Changelog, and versioning follows Semantic
 Versioning.
 
+## [1.1.0-beta8]
+
+### Fixed
+
+- Updated administrator-only management WebSocket endpoints to use Home
+  Assistant's supported `@websocket_api.require_admin` authorization flow,
+  fixing password save/load failures on current Home Assistant releases.
+- Ensured the MeshCore raw-event callback runs on Home Assistant's event loop so
+  a valid repeater `clock` reply completes the pending request immediately
+  instead of being recorded once as successful and later again as a timeout.
+- Prevented the repeater detail page from treating the initial post-restart
+  `queued` clock state as a real operation, so individual Check and Sync actions
+  are available without first running Check All.
+
+### Changed
+
+- Fleet clock checks are response-driven and no longer add the legacy 15/30
+  second inter-repeater pauses after a terminal result.
+- Clock synchronisation keeps `clkreboot` as the required no-reply reset step,
+  then probes for LOGIN_SUCCESS and continues as soon as the repeater is back.
+- `time <epoch_seconds>` now uses Home Assistant UTC and waits only briefly for
+  an optional firmware reply before immediately verifying with `clock`.
+- Repeater password input is visible while being entered, then cleared after a
+  successful save; saved passwords remain backend-only and are not returned to
+  the browser.
+- Password saving stores the value only. Password correctness is checked later
+  when an administrator operation actually authenticates to the repeater.
+- The repeater clock panel keeps an operator-visible activity transcript for the
+  response-driven synchronisation sequence.
+
 ## [1.1.0-beta7]
 
 ### Added
