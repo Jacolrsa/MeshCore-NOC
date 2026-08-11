@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - v1.1-clock-sync
+      - main
   workflow_dispatch:
 
 permissions:
@@ -20,3 +21,21 @@ jobs:
         with:
           category: integration
           comment: "false"
+
+  release-checks:
+    name: Release checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Compile Python integration
+        run: python -m compileall -q custom_components/meshcore_noc
+
+      - name: Check dashboard JavaScript syntax
+        run: |
+          node --check custom_components/meshcore_noc/frontend/meshcore-noc-dashboard.js
+          node --check custom_components/meshcore_noc/frontend/meshcore-noc-dashboard-patch.js
+
+      - name: Run frontend unit tests
+        run: node --test tests/frontend/test_dashboard.js
