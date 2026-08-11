@@ -13,293 +13,90 @@
 
   _Independent Community Project_
 
-  [![Version](https://img.shields.io/badge/version-1.0.0-4da3ff)](CHANGELOG.md)
+  [![Version](https://img.shields.io/badge/version-1.1.0-4da3ff)](CHANGELOG.md)
   [![Status](https://img.shields.io/badge/status-stable-36c96b)](ROADMAP.md)
   [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-custom%20integration-41bdf5)](https://www.home-assistant.io/)
   [![Branch](https://img.shields.io/badge/branch-main-4da3ff)](https://github.com/Jacolrsa/MeshCore-NOC/tree/main)
 </div>
 
-## Project introduction
+## What MeshCore NOC does
 
-MeshCore NOC turns MeshCore telemetry and device identity into a focused Home
-Assistant operations experience. It discovers upstream MeshCore devices, lets
-an operator choose the managed fleet, creates stable per-repeater entities, and
-provides a compact Mission Control dashboard for daily monitoring and clock
-checks.
+MeshCore NOC turns MeshCore telemetry and repeater identity into a focused Home
+Assistant operations interface. It discovers upstream MeshCore devices, lets an
+operator select a managed fleet, creates stable NOC entities, and provides a
+Mission Control dashboard for day-to-day monitoring and clock management.
 
-The project is designed for network operators who want useful fleet status
-without manually assembling helper entities or relying on Developer Tools for
-normal operation. MeshCore remains responsible for transport and raw telemetry;
-MeshCore NOC consumes supported Home Assistant services, events, states, and
-registries.
+MeshCore remains responsible for radio transport, contacts, routing and raw
+telemetry. MeshCore NOC uses supported Home Assistant state, registry, service
+and event contracts and does not replace the upstream MeshCore integration.
 
-> MeshCore NOC `1.0.0` is the first clean public release. Back up Home
-> Assistant before installation. The project is not currently distributed
-> through HACS.
+## v1.1.0 highlights
 
-### Upgrade note
+### Mission Control
 
-Development installations using a pre-release 4.x version must be removed and
-installed fresh because the public release version sequence restarts at 1.0.0.
+- Responsive fleet overview with network health, alerts and fleet actions.
+- Fleet rows use the worst current condition from availability/health, battery
+  and clock state so warning, degraded and critical repeaters are immediately
+  visible.
+- Per-repeater detail pages provide monitoring, clock controls, calibration,
+  thresholds, identity/display settings and private administrator-password
+  management.
+- Recorder-backed fleet voltage history now refreshes in the background without
+  blanking the graph, includes a 6 h range, time-axis labels, current values,
+  period change, clickable series visibility and an interactive crosshair.
+- Recorder gaps remain gaps. Large instantaneous calibration/recorder jumps are
+  broken visually instead of being drawn as misleading vertical voltage events.
 
-## Feature highlights
+### Clock Intelligence
 
-| Monitor | Analyse | Operate |
-| --- | --- | --- |
-| Calibrated voltage and battery | Health and freshness classification | Dashboard-first fleet clock checks |
-| Repeater availability and telemetry age | Clock offset and retained status | Per-repeater Check Clock controls |
-| Fleet KPIs and Recorder graphs | Network and fleet clock summaries | Serialized checks with cancellation |
+- **Check Clock requires the saved repeater administrator password.**
+- Login and clock-command waits use MeshCore's route-provided
+  `suggested_timeout` rather than one fixed timeout for direct and multi-hop
+  repeaters.
+- Measured clock-command RTT is used to compensate radio travel time when
+  calculating displayed repeater clock offset.
+- Clock synchronisation uses Home Assistant UTC as the authoritative source and
+  compensates the outgoing timestamp with the measured one-way route estimate.
+- Repeaters already within ±30 seconds are left untouched: no reboot and no
+  clock write are performed.
+- Companion clock recovery can repair future contact `lastmod` timestamps,
+  persist them safely, reboot the companion and then move its clock forward to
+  Home Assistant UTC without deleting contacts or factory-resetting the device.
+- Anti-replay recovery handles repeaters that retained an old future
+  administrator timestamp after the companion clock was corrected.
 
-- Discovers MeshCore-owned devices without manual entity IDs.
-- Preserves stable MeshCore identity across setup, reload, and selection changes.
-- Provides a responsive, one-screen Mission Control dashboard.
-- Exposes calibrated voltage, battery, health, freshness, clock offset, and
-  clock status.
-- Runs safe single-repeater and serialized fleet clock checks through existing
-  Home Assistant contracts.
-- Includes redacted diagnostics and native Stable/Development update channels.
+### Automation
 
-## Dashboard previews
+- Serialized **Check All** and **Sync All** operations never intentionally run
+  multiple repeater clock transactions in parallel.
+- Automatic fleet clock checks can run at a configured interval.
+- Automatic clock synchronisation is disabled by default and supports 6, 12,
+  24, 72 or 168 hour intervals.
+- Unattended automatic synchronisation will not start if a managed repeater is
+  missing its saved administrator password.
+- Legacy manual-check cooldown and fleet success/failure pacing controls are no
+  longer exposed in the v1.1 options UI.
 
-Live, redacted screenshots will replace these reserved placements after the
-v1.0.0 dashboard completes hardware validation.
+Read the [v1.1 release notes](docs/V1_1_RELEASE.md) for the complete operational
+sequence and validation notes.
 
-| Mission Control — desktop | Repeater Clock Intelligence |
-| --- | --- |
-| _Screenshot placeholder: 1920×1080 fleet overview with eight repeaters_ | _Screenshot placeholder: expanded repeater clock details and Check Clock control_ |
+## Managed entities
 
-| Fleet clock run | Responsive operations view |
-| --- | --- |
-| _Screenshot placeholder: active serialized run with progress and cancellation_ | _Screenshot placeholder: compact tablet/mobile layout_ |
+Each selected managed repeater has NOC-owned entities for:
 
-See the [screenshot capture checklist](docs/images/README.md).
+- calibrated voltage;
+- calibrated battery percentage;
+- health;
+- freshness;
+- clock offset;
+- clock status; and
+- Check Clock action.
 
-## Capabilities
+Fleet-level entities expose check/sync state, progress, last-run results and
+fleet clock health. Stable IDs remain authoritative across reloads and selection
+changes.
 
-- Discovers MeshCore-owned devices without manual entity IDs.
-- Preserves stable MeshCore identities in config-entry options.
-- Creates one managed MeshCore NOC device for each selected, resolved source.
-- Creates four device-scoped entities:
-  - calibrated voltage;
-  - calibrated battery percentage;
-  - health; and
-  - freshness.
-- Preserves the established ProMicro device and entity identities from Alpha2.
-- Refreshes from source-state listeners and a one-minute freshness timer.
-- Reconciles selection changes without deleting upstream MeshCore records.
-- Automatically registers a local Lovelace strategy and the **MeshCore NOC**
-  sidebar dashboard.
-- Provides Mission Control header, eight KPIs, managed-device cards, native
-  Recorder graphs, battery comparison, and presentation-level alerts.
-- Provides a controller-scoped Home Assistant Update entity with Stable and
-  Development channels.
-- Validates, backs up, replaces, and rolls back integration updates.
-- Exposes diagnostics for discovery, lifecycle, dashboard, and updater state.
-
-Alpha5.2 uses a fixed `-0.816 V` calibration offset and maps calibrated
-`3.000–4.200 V` linearly to `0–100%`. Configurable calibration, predictive
-battery intelligence, charging detection, solar analysis, topology, maps,
-detail popups, and persistent alert entities are not implemented.
-
-## Architecture
-
-```text
-MeshCore integration
-  └─ raw devices, stable identities, source entities, telemetry
-       ↓ Home Assistant registries and state machine
-MeshCore NOC discovery and selection
-  └─ one coordinator per selected managed device
-       ├─ Calibrated Voltage
-       ├─ Calibrated Battery
-       ├─ Health
-       └─ Freshness
-            ↓
-       Mission Control dashboard
-
-MeshCore NOC controller
-  └─ Update entity
-       ├─ Stable: published GitHub Releases
-       └─ Development: v4-development manifest
-```
-
-MeshCore remains responsible for source discovery, identity, and raw telemetry.
-MeshCore NOC owns only selected managed devices and its derived operational
-experience. Read [MH-103 — Architecture](docs/MH-103_Architecture.md) for the
-data flow, lifecycle, trust boundary, diagnostics, and testing strategy.
-
-## Requirements
-
-- A Home Assistant installation with the upstream MeshCore integration already
-  configured.
-- MeshCore source devices represented in Home Assistant’s device and entity
-  registries.
-- Manual access to `/config/custom_components`.
-- Home Assistant Recorder for history graphs; current values work without it.
-- Home Assistant 2026.3 or newer for local custom-integration branding.
-
-The repository’s existing development notes document Home Assistant 2026.6 or
-newer as the tested development baseline. Live compatibility should be
-validated before broad deployment.
-
-## Installation
-
-### Manual copy
-
-1. Back up Home Assistant.
-2. Download the `v4.0.0` release or check out the `main` branch.
-3. Copy the entire repository folder:
-
-   ```text
-   custom_components/meshcore_noc
-   ```
-
-   to:
-
-   ```text
-   /config/custom_components/meshcore_noc
-   ```
-
-4. Confirm this file exists:
-
-   ```text
-   /config/custom_components/meshcore_noc/manifest.json
-   ```
-
-5. Restart Home Assistant Core fully.
-6. Open **Settings → Devices & services → Add integration**.
-7. Search for **MeshCore NOC**.
-8. Select the discovered MeshCore devices to manage and choose an update
-   channel.
-
-For an SSH checkout:
-
-```sh
-cd /config
-INSTALL_TMP="$(mktemp -d)"
-git clone --depth 1 --branch main \
-  https://github.com/Jacolrsa/MeshCore-NOC.git \
-  "$INSTALL_TMP/MeshCore-NOC"
-mkdir -p /config/custom_components/meshcore_noc
-cp -a "$INSTALL_TMP/MeshCore-NOC/custom_components/meshcore_noc/." \
-  /config/custom_components/meshcore_noc/
-```
-
-Do not remove and re-add an existing MeshCore NOC config entry during a normal
-upgrade. Replace the component files, restart Home Assistant, and reload the
-entry only if state remains stale after restart. See the
-[installation guide](docs/installation.md).
-
-## Configuration
-
-Open **Settings → Devices & services → MeshCore NOC → Configure** to:
-
-- replace the set of managed MeshCore devices; and
-- select **Stable** or **Development** updates.
-
-Submitting options reloads the config entry. Retained stable IDs keep their
-registry identities and history. Deselected NOC-owned entities and empty
-managed devices are removed after platform unload; upstream MeshCore devices,
-Template entities, and helpers are not removed.
-
-The first selected device on a new installation receives the legacy ProMicro
-compatibility identity. On an upgraded installation, registry ownership keeps
-that identity attached to the same stable device. Its entity IDs remain:
-
-```text
-sensor.meshcore_noc_promicro_repeater_calibrated_voltage
-sensor.meshcore_noc_promicro_repeater_calibrated_battery_percentage
-sensor.meshcore_noc_promicro_repeater_health
-binary_sensor.meshcore_noc_promicro_repeater_fresh
-```
-
-Additional managed devices use stable-ID-based unique IDs and friendly,
-normalised entity-ID slugs.
-
-## Fleet clock checks
-
-Clock Intelligence can check one managed repeater with
-`meshcore_noc.check_clock` or start a serialized fleet run with
-`meshcore_noc.check_all_clocks`. Fleet runs snapshot the currently managed,
-addressable repeaters and dispatch exactly one `clock` command at a time. The
-next repeater is not checked until the current one completes, fails, or times
-out and the configured safety delay expires.
-
-Fleet controls are available as `button.check_all_clocks` and
-`button.cancel_clock_check`. Cancellation never retracts a transmitted command;
-it waits for the current check to finish and stops before the next dispatch.
-Progress, lifecycle state, last completion, and running state are exposed as
-fleet-level diagnostic entities on the MeshCore NOC device.
-
-Automatic fleet checks are disabled by default. Configuration options control
-the interval, success delay, failure/timeout delay, and optional rotating start
-point. The first scheduled run occurs only after the full configured interval.
-Fleet history is limited to the latest 20 in-memory runs and is reset by a
-restart.
-
-Fleet Clock Management also provides central **Synchronise All Clocks**
-control. It processes the current managed, addressable repeater set
-sequentially with a two-second network-pacing delay, continues after individual
-failures, and reports a structured result for every repeater.
-
-Automatic fleet synchronisation is configured in the integration options. It
-is disabled by default and supports 6, 12, 24, 72, or 168 hour intervals. An
-overdue schedule runs once after Home Assistant starts; missed intervals are
-not replayed.
-
-> Repeaters are synchronised to the connected MeshCore companion clock. Ensure
-> the companion clock is correct before enabling automatic synchronisation.
-
-Every addressable managed repeater also has a **Check Clock** button on its
-Home Assistant device. The Mission Control dashboard uses those button entities
-and the fleet buttons; it does not issue MeshCore commands itself.
-
-Clock Offset and Clock Status retain the last successful reading when a later
-attempt times out, fails, or contains a malformed reply. Their attributes expose
-the latest attempt time, outcome, error, successful-reading time, data age, RTT,
-response text, sender timestamp, and bounded attempt history. Unknown means no
-successful clock response has been recorded since the integration was loaded.
-Retained clock readings are currently in memory and are not restored after a
-Home Assistant restart.
-
-## Mission Control dashboard
-
-MeshCore NOC automatically registers its bundled JavaScript as a local
-Lovelace module and creates the **MeshCore NOC** sidebar dashboard at
-`/meshcore-noc`. No dashboard YAML, `/config/www` copy, manual resource, or
-HACS frontend card is required.
-
-The primary Mission Control view contains:
-
-- one compact status header combining network health, alerts, fleet clock
-  state, automatic-sync state, and fleet actions;
-- a concise, clickable fleet repeater list;
-- one large calibrated-voltage history chart with 24-hour, 7-day, and 30-day
-  ranges; and
-- one generated detail subview for every managed repeater.
-
-The dashboard is the normal Clock Intelligence control surface. **Check All
-Clocks** and **Sync All Clocks** operate the existing controller entities.
-Active runs show progress and the current repeater without creating a separate
-large Clock Management card. Each repeater detail view retains the existing
-single-repeater check action and invokes the existing authenticated
-`meshcore_noc.sync_repeater_clock` service.
-
-Detail views consolidate monitoring, clock status/results, source identity,
-advanced diagnostics, and explicit per-repeater management. Administrators can
-save calibrated-voltage settings, battery/Last Seen/clock thresholds, a
-dashboard display name, and a private repeater password. Settings are keyed by
-the existing NOC stable ID and persist through Home Assistant restarts and
-integration reloads. A stored password is never returned by the backend,
-exposed by entities or diagnostics, or written to integration logs.
-
-Recorder is required only for historical graphs. If another dashboard already
-uses the `meshcore-noc` path, the integration preserves it and posts a
-persistent notification instead of overwriting it.
-
-After installing a new frontend bundle, restart Home Assistant and hard-refresh
-the browser.
-
-## Health and freshness
+## Health and freshness defaults
 
 | Freshness | Condition |
 | --- | --- |
@@ -308,85 +105,149 @@ the browser.
 | Stale | 120–179 minutes |
 | Offline | 180 minutes or more, or source unavailable |
 
-Health is:
+Default battery thresholds are 40% warning and 20% critical. These values, the
+voltage calibration, freshness thresholds, display name and clock thresholds can
+be adjusted per managed repeater from its Mission Control detail page.
 
-- **Unknown** without a battery value;
-- **Poor** when Offline or battery is below 20%;
-- **Fair** when Stale or battery is below 40%;
-- **Good** when Aging or battery is below 80%; and
-- **Excellent** otherwise.
+## Requirements
+
+- Home Assistant with the upstream MeshCore integration configured.
+- MeshCore devices represented in Home Assistant's device/entity registries.
+- Home Assistant Recorder for historical graphs. Current telemetry works without
+  Recorder.
+- Home Assistant 2026.3 or newer for local custom-integration branding.
+- A saved repeater administrator password for authenticated clock checks and
+  synchronisation.
+
+## Installation and upgrades
+
+### HACS custom repository
+
+If this repository is already installed as a HACS custom integration, use
+**HACS → MeshCore NOC → Redownload** to install a selected release, then perform
+a full Home Assistant restart.
+
+### Manual installation
+
+1. Back up Home Assistant.
+2. Download the stable release or check out `main`.
+3. Copy `custom_components/meshcore_noc` to
+   `/config/custom_components/meshcore_noc`.
+4. Confirm `/config/custom_components/meshcore_noc/manifest.json` exists.
+5. Restart Home Assistant fully.
+6. Add or reload **MeshCore NOC** under **Settings → Devices & services**.
+
+Do not remove and re-add a working MeshCore NOC config entry during a normal
+upgrade. Replace/redownload the component and restart Home Assistant so registry
+identities and retained settings stay attached to the same stable IDs.
+
+See [Installation](docs/installation.md) and
+[Troubleshooting](docs/troubleshooting.md).
+
+## Configuration
+
+Open **Settings → Devices & services → MeshCore NOC → Configure**.
+
+The v1.1 options page intentionally contains only active operator controls:
+
+- managed MeshCore devices;
+- update channel;
+- automatic fleet clock checks and interval; and
+- automatic clock synchronisation and interval.
+
+Per-repeater calibration, monitoring thresholds, display name and administrator
+password live on the repeater detail page in Mission Control.
+
+## Clock-check workflow
+
+A normal authenticated check is:
+
+```text
+Home Assistant UTC
+      ↓
+password login to repeater
+      ↓ route-provided suggested_timeout
+login confirmation
+      ↓ short radio settle
+clock command
+      ↓ route-provided suggested_timeout
+clock reply + measured RTT
+      ↓
+latency-compensated offset/status
+```
+
+Direct repeaters normally complete much faster than routed repeaters. NOC waits
+for the timeout returned by the actual MeshCore transmission instead of applying
+the same fixed window to every route.
+
+## Clock-sync workflow
+
+NOC first performs the same authenticated, latency-aware pre-check. If the
+repeater is already within ±30 seconds, it reports success without changing the
+repeater.
+
+When correction is required, NOC performs the anti-replay-safe reboot/login
+sequence, verifies the connected companion clock, repairs an ahead-running
+companion only when required, sends a latency-compensated clock sync timestamp,
+and performs a final authenticated verification. A sync is successful only when
+the verified final offset is inside the ±30 second window.
+
+## Mission Control graph
+
+The graph uses Home Assistant Recorder history and remains self-contained; no
+ApexCharts or external frontend card is required.
+
+- 6 h / 24 h / 7 d / 30 d ranges.
+- Background refresh keeps the last good graph visible while new Recorder data
+  is fetched.
+- A temporary Recorder/API refresh failure keeps the last good graph visible and
+  reports the refresh problem instead of clearing the panel.
+- The x-axis shows time/date context and the legend shows current voltage and
+  change over the selected period.
+- Click a legend item to hide/show a repeater series.
+- Move over the plot for a crosshair and timestamped per-repeater values.
 
 ## Update channels
 
-The native Update entity belongs to the MeshCore NOC controller device.
+**Stable** is the default. It reads published, non-prerelease GitHub Releases.
 
-### Stable
+**Development** follows the active `v1.1-clock-sync` development branch and may
+contain unfinished work. Detection is version-based, so a development build
+must change the manifest version before Home Assistant offers it as an update.
 
-Stable is the default. It checks published GitHub Releases and ignores drafts
-and prereleases. Until a valid stable release exists, the latest version is
-Unknown.
+Both channels use the native MeshCore NOC Update entity. Update installation
+validates the archive and integration manifest, creates an integration-only
+backup, stages replacement, and requires a Home Assistant restart before the
+loaded version changes. See [Update channels](docs/updates.md).
 
-### Development
-
-Development checks the manifest on `v4-development` and includes latest commit
-metadata when GitHub provides it. It may contain unfinished or unstable work.
-Detection is version-based: a commit with an unchanged manifest version is not
-offered as a new build.
-
-Both channels check at startup and at most every six hours. A temporary network
-failure retains the last successful result; unexpected remote metadata enters a
-safe Unknown state and records a bounded diagnostics error.
-
-Installation validates archive paths, symlinks, sizes, required files, domain,
-and exact version. It backs up only the installed integration under
-`/config/meshcore_noc_backups`, keeps the five newest backups, replaces the
-component, and requests a Home Assistant restart. The loaded version changes
-only after restart.
-
-Read the [update-channel guide](docs/updates.md) and
-[MH-104 — Release Process](docs/MH-104_Release_Process.md).
-
-## Diagnostics and support
+## Diagnostics and security
 
 Download diagnostics from **Settings → Devices & services → MeshCore NOC →
-three-dot menu → Download diagnostics**. Before reporting an issue:
+three-dot menu → Download diagnostics**.
 
-1. confirm upstream MeshCore entities are available;
-2. restart Home Assistant after a component upgrade;
-3. inspect **Settings → System → Logs**;
-4. review [troubleshooting](docs/troubleshooting.md); and
-5. attach redacted diagnostics to the
-   [bug report](.github/ISSUE_TEMPLATE/bug_report.yml).
+Repeater administrator passwords are stored in Home Assistant private storage.
+They are not returned by the management API, exposed in entities/diagnostics, or
+written to normal integration logs.
 
-Do not publish credentials, private node IDs, locations, or unreviewed
-diagnostics.
+Before sharing diagnostics, redact private node IDs, locations and any other
+sensitive context.
 
 ## Documentation
 
 | Document | Purpose |
 | --- | --- |
+| [v1.1 release notes](docs/V1_1_RELEASE.md) | Final v1.1 behaviour, clock workflow, automation and graph changes |
 | [MH-100 — UI Specification](docs/MH-100_UI_Specification.md) | Mission Control requirements and acceptance criteria |
-| [MH-101 — Design System](docs/MH-101_Design_System.md) | Visual semantics, components, accessibility, and motion |
-| [MH-102 — Product Roadmap](docs/MH-102_Roadmap.md) | Implemented foundation and planned phases |
-| [MH-103 — Architecture](docs/MH-103_Architecture.md) | Current components, data flow, lifecycle, updater, diagnostics |
-| [MH-104 — Release Process](docs/MH-104_Release_Process.md) | Alpha/stable release, validation, acceptance, rollback |
-| [Installation](docs/installation.md) | Manual deployment and live verification |
-| [Update channels](docs/updates.md) | Channel behaviour and installation safeguards |
-| [Troubleshooting](docs/troubleshooting.md) | Common installation and telemetry issues |
-| [Migration](docs/MIGRATION.md) | v3-to-v4 migration guardrails |
-| [Brand guide](branding/docs/BRAND_GUIDE.md) | Logo, colour, typography, spacing, and usage rules |
-| [Security](SECURITY.md) | Supported reporting process |
+| [MH-101 — Design System](docs/MH-101_Design_System.md) | Visual semantics and accessibility |
+| [MH-103 — Architecture](docs/MH-103_Architecture.md) | Integration ownership and data flow |
+| [MH-104 — Release Process](docs/MH-104_Release_Process.md) | Release validation and rollback |
+| [Installation](docs/installation.md) | Deployment and live verification |
+| [Update channels](docs/updates.md) | Stable/development update behaviour |
+| [Troubleshooting](docs/troubleshooting.md) | Common installation, graph and clock issues |
+| [Roadmap](ROADMAP.md) | Released and planned work |
+| [Security](SECURITY.md) | Security reporting |
 
-## Roadmap
-
-Foundation shipped in v4.0.0 and Professional UI work remains ongoing.
-Predictive intelligence, network operations views, and version 1.0 readiness
-remain planned. See the [concise roadmap](ROADMAP.md) and
-[detailed product roadmap](docs/MH-102_Roadmap.md).
-
-## Development and contributing
-
-Useful repository checks:
+## Development checks
 
 ```sh
 python scripts/validate_branding.py
@@ -398,23 +259,7 @@ node --test tests/frontend/test_dashboard.js
 git diff --check
 ```
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a change. Participation
-is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
-
-## Community
-
-MeshCore NOC is built in the open for operators, radio enthusiasts, and Home
-Assistant users:
-
-- report reproducible defects with the
-  [bug report template](.github/ISSUE_TEMPLATE/bug_report.yml);
-- propose scoped improvements with the
-  [feature request template](.github/ISSUE_TEMPLATE/feature_request.yml);
-- review the [roadmap](ROADMAP.md) before proposing major functionality;
-- follow [CONTRIBUTING.md](CONTRIBUTING.md) and the
-  [Code of Conduct](CODE_OF_CONDUCT.md); and
-- never publish credentials, private node identifiers, precise locations, or
-  unreviewed diagnostics.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing changes.
 
 ## Disclaimer
 
@@ -425,6 +270,5 @@ Assistant users:
 
 ## Licence and acknowledgements
 
-MeshCore NOC is licensed under the MIT License. See the root
-[`LICENSE`](LICENSE) file for the full terms. Referenced upstream projects
-remain subject to their own licences.
+MeshCore NOC is licensed under the MIT License. See [`LICENSE`](LICENSE).
+Referenced upstream projects remain subject to their own licences.
