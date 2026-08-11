@@ -1,7 +1,7 @@
 """Home Assistant UTC based repeater clock synchronisation.
 
 This module installs a bounded synchronisation workflow on the existing clock
-manager without exposing repeater passwords.  The workflow deliberately uses
+manager without exposing repeater passwords. The workflow deliberately uses
 only the public ``meshcore.execute_command`` Home Assistant service and the
 public ``meshcore_raw_event`` event stream.
 """
@@ -17,11 +17,11 @@ from typing import Any
 from homeassistant.exceptions import HomeAssistantError, ServiceNotFound
 
 from .clock import (
-    ClockCheckFleetCollisionError,
     ClockCheckState,
     ClockSyncResult,
     ClockSyncState,
     MeshCoreNocClockManager,
+    UnknownManagedRepeaterError,
 )
 from .const import DOMAIN, MESHCORE_DOMAIN
 
@@ -53,12 +53,17 @@ def _management_store(manager: MeshCoreNocClockManager) -> Any | None:
         return None
     for entry in config_entries.async_entries(DOMAIN):
         runtime = getattr(entry, "runtime_data", None)
-        if runtime is not None and getattr(runtime, "clock_manager", None) is manager:
+        if (
+            runtime is not None
+            and getattr(runtime, "clock_manager", None) is manager
+        ):
             return getattr(runtime, "management_store", None)
     return None
 
 
-def _password_for(manager: MeshCoreNocClockManager, stable_id: str) -> str | None:
+def _password_for(
+    manager: MeshCoreNocClockManager, stable_id: str
+) -> str | None:
     """Read a password only inside the backend private boundary."""
     store = _management_store(manager)
     if store is None or not hasattr(store, "password_for"):
@@ -70,7 +75,9 @@ def _sync_logs(manager: MeshCoreNocClockManager) -> dict[str, list[str]]:
     return manager.__dict__.setdefault("_epoch_sync_logs", {})
 
 
-def _pending_logins(manager: MeshCoreNocClockManager) -> dict[str, asyncio.Future[bool]]:
+def _pending_logins(
+    manager: MeshCoreNocClockManager,
+) -> dict[str, asyncio.Future[bool]]:
     return manager.__dict__.setdefault("_epoch_pending_logins", {})
 
 
@@ -78,7 +85,9 @@ def _capture_targets(manager: MeshCoreNocClockManager) -> dict[str, str]:
     return manager.__dict__.setdefault("_epoch_sync_capture_targets", {})
 
 
-def _remote_errors(manager: MeshCoreNocClockManager) -> dict[str, tuple[str, str]]:
+def _remote_errors(
+    manager: MeshCoreNocClockManager,
+) -> dict[str, tuple[str, str]]:
     return manager.__dict__.setdefault("_epoch_sync_remote_errors", {})
 
 
@@ -120,7 +129,9 @@ async def _execute_meshcore_command(
     target: Any,
     command: str,
 ) -> dict[str, Any]:
-    if not manager.hass.services.has_service(MESHCORE_DOMAIN, "execute_command"):
+    if not manager.hass.services.has_service(
+        MESHCORE_DOMAIN, "execute_command"
+    ):
         raise HomeAssistantError("meshcore.execute_command unavailable")
     try:
         response = await manager.hass.services.async_call(
@@ -133,11 +144,15 @@ async def _execute_meshcore_command(
     except (HomeAssistantError, ServiceNotFound):
         raise
     except Exception as err:  # noqa: BLE001 - public service boundary
-        raise HomeAssistantError(f"MeshCore service call failed: {err}") from err
+        raise HomeAssistantError(
+            f"MeshCore service call failed: {err}"
+        ) from err
     if not isinstance(response, dict):
         raise HomeAssistantError("MeshCore send confirmation unavailable")
     if response.get("error"):
-        raise HomeAssistantError(f"MeshCore send failed: {response['error']}")
+        raise HomeAssistantError(
+            f"MeshCore send failed: {response['error']}"
+        )
     return response
 
 
@@ -152,7 +167,10 @@ async def _send_login(
     pending = _pending_logins(manager)
     pending[prefix] = future
     # Functional syntax keeps whitespace and quotes in passwords safely parsed.
-    command = f"send_login({json.dumps(target.pubkey_prefix)}, {json.dumps(password)})"
+    command = (
+        f"send_login({json.dumps(target.pubkey_prefix)}, "
+        f"{json.dumps(password)})"
+    )
     try:
         await _execute_meshcore_command(manager, target, command)
         try:
@@ -165,7 +183,10 @@ async def _send_login(
                 "password and radio path.",
             )
         if not accepted:
-            return False, "The repeater rejected the saved administrator password."
+            return (
+                False,
+                "The repeater rejected the saved administrator password.",
+            )
         return True, None
     finally:
         pending.pop(prefix, None)
@@ -189,7 +210,9 @@ def _finish_with_transcript(
     result: ClockSyncState,
     error: str | None = None,
 ) -> ClockSyncResult:
-    response.remote_response_text = _sync_transcript(manager, response.stable_id)
+    response.remote_response_text = _sync_transcript(
+        manager, response.stable_id
+    )
     return manager._finish_sync(response, result, error)
 
 
@@ -199,11 +222,11 @@ async def _async_sync_repeater_clock(
     *,
     fleet_sync_run_id: str | None = None,
 ) -> ClockSyncResult:
-    """Reset, authenticate, push HA UTC epoch, wait, then verify the repeater."""
+    """Reset, authenticate, push HA UTC epoch, wait, then verify."""
     started_at = self._utc_now()
     try:
         target = self.resolve_target(repeater_id)
-    except Exception as err:  # resolve_target supplies the operator-safe detail
+    except UnknownManagedRepeaterError as err:
         return ClockSyncResult(
             stable_id=repeater_id,
             pubkey_prefix=None,
@@ -223,8 +246,15 @@ async def _async_sync_repeater_clock(
     )
     _clear_sync_log(self, target.stable_id)
 
-    if self._fleet_sync_run_id is not None and fleet_sync_run_id != self._fleet_sync_run_id:
-        _append_sync_line(self, target.stable_id, "Sync blocked: fleet synchronisation is active.")
+    if (
+        self._fleet_sync_run_id is not None
+        and fleet_sync_run_id != self._fleet_sync_run_id
+    ):
+        _append_sync_line(
+            self,
+            target.stable_id,
+            "Sync blocked: fleet synchronisation is active.",
+        )
         return _finish_with_transcript(
             self,
             response,
@@ -232,7 +262,11 @@ async def _async_sync_repeater_clock(
             "a fleet clock synchronization is already active",
         )
     if self._fleet_run_id is not None:
-        _append_sync_line(self, target.stable_id, "Sync blocked: fleet clock check is active.")
+        _append_sync_line(
+            self,
+            target.stable_id,
+            "Sync blocked: fleet clock check is active.",
+        )
         return _finish_with_transcript(
             self,
             response,
@@ -240,7 +274,11 @@ async def _async_sync_repeater_clock(
             "a fleet clock check is already active",
         )
     if prefix in self._pending_sync or prefix in self._pending:
-        _append_sync_line(self, target.stable_id, "Sync blocked: another clock operation is active.")
+        _append_sync_line(
+            self,
+            target.stable_id,
+            "Sync blocked: another clock operation is active.",
+        )
         return _finish_with_transcript(
             self,
             response,
@@ -254,9 +292,16 @@ async def _async_sync_repeater_clock(
             "Repeater password not configured. Save the administrator password "
             "in Repeater access before synchronising the clock."
         )
-        _append_sync_line(self, target.stable_id, "Password required before clock synchronisation.")
+        _append_sync_line(
+            self,
+            target.stable_id,
+            "Password required before clock synchronisation.",
+        )
         return _finish_with_transcript(
-            self, response, ClockSyncState.UNAUTHORIZED, message
+            self,
+            response,
+            ClockSyncState.UNAUTHORIZED,
+            message,
         )
 
     task = asyncio.current_task()
@@ -269,9 +314,11 @@ async def _async_sync_repeater_clock(
     response.pre_sync_offset_seconds = result_state.clock_offset_seconds
     self._notify(target.stable_id)
 
-    # Keep the existing concurrency gate occupied.  Its already-completed future
-    # lets normal clock replies continue through the original raw-event handler.
-    gate_future: asyncio.Future[str] = asyncio.get_running_loop().create_future()
+    # Occupy the existing clock-operation gate. Its completed future means the
+    # original raw-event handler can still process the later verification reply.
+    gate_future: asyncio.Future[str] = (
+        asyncio.get_running_loop().create_future()
+    )
     gate_future.set_result("epoch-sync-gate")
     self._pending_sync[prefix] = SimpleNamespace(
         target=target,
@@ -287,17 +334,25 @@ async def _async_sync_repeater_clock(
             target.stable_id,
             "Starting clock sync from Home Assistant UTC time.",
         )
-        _append_sync_line(self, target.stable_id, "Authenticating to repeater…")
+        _append_sync_line(
+            self, target.stable_id, "Authenticating to repeater…"
+        )
         accepted, login_error = await _send_login(self, target, password)
         if not accepted:
-            _append_sync_line(self, target.stable_id, login_error or "Repeater login failed.")
+            _append_sync_line(
+                self,
+                target.stable_id,
+                login_error or "Repeater login failed.",
+            )
             return _finish_with_transcript(
                 self,
                 response,
                 ClockSyncState.UNAUTHORIZED,
                 login_error or "repeater login failed",
             )
-        _append_sync_line(self, target.stable_id, "Administrator login accepted.")
+        _append_sync_line(
+            self, target.stable_id, "Administrator login accepted."
+        )
 
         _append_sync_line(
             self,
@@ -313,17 +368,25 @@ async def _async_sync_repeater_clock(
         await asyncio.sleep(_REBOOT_SETTLE_SECONDS)
 
         # Reboot clears the remote administration session, so authenticate again.
-        _append_sync_line(self, target.stable_id, "Re-authenticating after reboot…")
+        _append_sync_line(
+            self, target.stable_id, "Re-authenticating after reboot…"
+        )
         accepted, login_error = await _send_login(self, target, password)
         if not accepted:
-            _append_sync_line(self, target.stable_id, login_error or "Post-reboot login failed.")
+            _append_sync_line(
+                self,
+                target.stable_id,
+                login_error or "Post-reboot login failed.",
+            )
             return _finish_with_transcript(
                 self,
                 response,
                 ClockSyncState.UNAUTHORIZED,
                 login_error or "post-reboot repeater login failed",
             )
-        _append_sync_line(self, target.stable_id, "Post-reboot login accepted.")
+        _append_sync_line(
+            self, target.stable_id, "Post-reboot login accepted."
+        )
 
         _remote_errors(self).pop(prefix, None)
         epoch_seconds = int(self._utc_now().timestamp())
@@ -331,13 +394,19 @@ async def _async_sync_repeater_clock(
         _append_sync_line(
             self,
             target.stable_id,
-            f"Sending Home Assistant time {readable_utc} (epoch {epoch_seconds})…",
+            (
+                f"Sending Home Assistant time {readable_utc} "
+                f"(epoch {epoch_seconds})…"
+            ),
         )
         await _send_remote_command(self, target, f"time {epoch_seconds}")
         _append_sync_line(
             self,
             target.stable_id,
-            f"Time command sent. Waiting {_SET_TIME_SETTLE_SECONDS} s before verification…",
+            (
+                f"Time command sent. Waiting {_SET_TIME_SETTLE_SECONDS} s "
+                "before verification…"
+            ),
         )
         await asyncio.sleep(_SET_TIME_SETTLE_SECONDS)
 
@@ -349,10 +418,18 @@ async def _async_sync_repeater_clock(
                 if error_kind == "unauthorized"
                 else ClockSyncState.COMMAND_FAILED
             )
-            _append_sync_line(self, target.stable_id, f"Repeater reported an error: {text}")
+            _append_sync_line(
+                self,
+                target.stable_id,
+                f"Repeater reported an error: {text}",
+            )
             return _finish_with_transcript(self, response, state, text)
 
-        _append_sync_line(self, target.stable_id, "Checking repeater clock to verify new time…")
+        _append_sync_line(
+            self,
+            target.stable_id,
+            "Checking repeater clock to verify new time…",
+        )
         try:
             post_check = await self.async_check_clock(
                 target.stable_id,
@@ -360,46 +437,80 @@ async def _async_sync_repeater_clock(
                 bypass_cooldown=True,
             )
         except Exception as err:  # noqa: BLE001 - verification boundary
-            _append_sync_line(self, target.stable_id, f"Verification failed: {err}")
+            _append_sync_line(
+                self,
+                target.stable_id,
+                f"Verification failed: {err}",
+            )
             return _finish_with_transcript(
-                self, response, ClockSyncState.VERIFICATION_FAILED, str(err)
+                self,
+                response,
+                ClockSyncState.VERIFICATION_FAILED,
+                str(err),
             )
         if post_check.state is not ClockCheckState.COMPLETED:
-            error = f"post-sync clock check failed: {post_check.error or post_check.state}"
+            error = (
+                "post-sync clock check failed: "
+                f"{post_check.error or post_check.state}"
+            )
             _append_sync_line(self, target.stable_id, error)
             return _finish_with_transcript(
-                self, response, ClockSyncState.VERIFICATION_FAILED, error
+                self,
+                response,
+                ClockSyncState.VERIFICATION_FAILED,
+                error,
             )
 
         response.post_sync_offset_seconds = post_check.clock_offset_seconds
         result_state.offset_after_sync_seconds = post_check.clock_offset_seconds
+        offset = post_check.clock_offset_seconds
+        offset_text = "unknown" if offset is None else f"{offset:+d} s"
         _append_sync_line(
             self,
             target.stable_id,
-            f"Clock verified. Offset is {post_check.clock_offset_seconds:+d} s.",
+            f"Clock verified. Offset is {offset_text}.",
         )
-        _append_sync_line(self, target.stable_id, "Clock synchronisation completed successfully.")
-        return _finish_with_transcript(self, response, ClockSyncState.SUCCESS)
-    except asyncio.CancelledError:
-        _append_sync_line(self, target.stable_id, "Clock synchronisation cancelled.")
+        _append_sync_line(
+            self,
+            target.stable_id,
+            "Clock synchronisation completed successfully.",
+        )
         return _finish_with_transcript(
-            self, response, ClockSyncState.CANCELLED, "clock sync cancelled"
+            self, response, ClockSyncState.SUCCESS
+        )
+    except asyncio.CancelledError:
+        _append_sync_line(
+            self, target.stable_id, "Clock synchronisation cancelled."
+        )
+        return _finish_with_transcript(
+            self,
+            response,
+            ClockSyncState.CANCELLED,
+            "clock sync cancelled",
         )
     except (HomeAssistantError, ServiceNotFound) as err:
-        _append_sync_line(self, target.stable_id, f"Command failed: {err}")
-        return _finish_with_transcript(
-            self, response, ClockSyncState.COMMAND_FAILED, str(err)
+        _append_sync_line(
+            self, target.stable_id, f"Command failed: {err}"
         )
-    except ClockCheckFleetCollisionError as err:
-        _append_sync_line(self, target.stable_id, f"Clock operation collision: {err}")
-        return _finish_with_transcript(self, response, ClockSyncState.FAILED, str(err))
+        return _finish_with_transcript(
+            self,
+            response,
+            ClockSyncState.COMMAND_FAILED,
+            str(err),
+        )
     except Exception as err:  # noqa: BLE001 - bounded sync boundary
         _LOGGER.exception(
             "Unexpected repeater clock sync failure for stable_id=%s",
             target.stable_id,
         )
-        _append_sync_line(self, target.stable_id, f"Unexpected sync failure: {err}")
-        return _finish_with_transcript(self, response, ClockSyncState.FAILED, str(err))
+        _append_sync_line(
+            self,
+            target.stable_id,
+            f"Unexpected sync failure: {err}",
+        )
+        return _finish_with_transcript(
+            self, response, ClockSyncState.FAILED, str(err)
+        )
     finally:
         _pending_logins(self).pop(prefix, None)
         _capture_targets(self).pop(prefix, None)
@@ -411,7 +522,9 @@ async def _async_sync_repeater_clock(
             self._sync_tasks.discard(task)
 
 
-def _async_handle_raw_event(self: MeshCoreNocClockManager, event: Any) -> None:
+def _async_handle_raw_event(
+    self: MeshCoreNocClockManager, event: Any
+) -> None:
     """Correlate login outcomes and safe sync replies, then keep old handling."""
     data = getattr(event, "data", {})
     event_type = data.get("event_type")
@@ -440,7 +553,9 @@ def _async_handle_raw_event(self: MeshCoreNocClockManager, event: Any) -> None:
             and text.strip()
         ):
             bounded = text.strip()[:180]
-            _append_sync_line(self, stable_id, f"Repeater replied: {bounded}")
+            _append_sync_line(
+                self, stable_id, f"Repeater replied: {bounded}"
+            )
             lowered = bounded.casefold()
             if (
                 "unauthorized" in lowered
