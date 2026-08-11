@@ -25,10 +25,14 @@ from .const import (
     STALE_MAX_AGE,
     VOLTAGE_OFFSET,
 )
+from .epoch_sync import install_epoch_sync
 
 _STORAGE_VERSION = 1
 _PASSWORD = "password"
 _PASSWORD_CHANGED_AT = "password_changed_at"
+
+# Install the backend clock workflow before a clock-manager instance starts.
+install_epoch_sync()
 
 
 class ManagementStore(Protocol):
