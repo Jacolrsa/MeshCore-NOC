@@ -28,6 +28,15 @@
       (panel) => panel.querySelector("h2")?.textContent?.trim() === heading,
     ) || null;
 
+  const replaceClockSourceWarning = (root) => {
+    for (const node of root?.querySelectorAll?.(".source-warning,.clock-health.warning") || []) {
+      if (node.textContent?.includes("connected MeshCore companion clock"))
+        node.textContent =
+          "Clock synchronisation uses the Home Assistant UTC system clock. Home Assistant should have working internet/NTP time synchronisation.";
+    }
+    return root;
+  };
+
   const install = async () => {
     if (typeof customElements === "undefined") return;
     await customElements.whenDefined("meshcore-noc-overview-card");
@@ -36,6 +45,8 @@
     Card.prototype.__clockSyncUxPatched = true;
 
     const originalDetailView = Card.prototype._detailView;
+    const originalCombinedHeader = Card.prototype._combinedHeader;
+    const originalFleetClockSection = Card.prototype._fleetClockSection;
     const originalHandleAction = Card.prototype._handleAction;
     const originalManagementAction = Card.prototype._handleManagementAction;
 
@@ -55,6 +66,14 @@
 .management-message.error{font-weight:700}
 `;
       this.shadowRoot.prepend(style);
+    };
+
+    Card.prototype._combinedHeader = function (...args) {
+      return replaceClockSourceWarning(originalCombinedHeader.call(this, ...args));
+    };
+
+    Card.prototype._fleetClockSection = function (...args) {
+      return replaceClockSourceWarning(originalFleetClockSection.call(this, ...args));
     };
 
     Card.prototype._detailView = function (...args) {
