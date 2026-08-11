@@ -6,6 +6,7 @@ public representation only reports whether a password is configured.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -27,12 +28,10 @@ from .const import (
 )
 from .epoch_sync import install_epoch_sync
 
+_LOGGER = logging.getLogger(__name__)
 _STORAGE_VERSION = 1
 _PASSWORD = "password"
 _PASSWORD_CHANGED_AT = "password_changed_at"
-
-# Install the backend clock workflow before a clock-manager instance starts.
-install_epoch_sync()
 
 
 class ManagementStore(Protocol):
@@ -266,6 +265,18 @@ def _send_error(
     connection.send_error(message_id, "invalid_repeater_settings", str(err))
 
 
+def _send_password_storage_error(
+    connection: websocket_api.ActiveConnection,
+    message_id: int,
+) -> None:
+    """Return a useful error without ever echoing secret material."""
+    connection.send_error(
+        message_id,
+        "repeater_password_storage_failed",
+        "The repeater password could not be saved. Check Home Assistant logs for details.",
+    )
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "meshcore_noc/management/get",
@@ -368,6 +379,12 @@ async def websocket_set_repeater_password(
     except RepeaterSettingsValidationError as err:
         _send_error(connection, msg["id"], err)
         return
+    except Exception:  # noqa: BLE001 - storage boundary must return a useful error
+        _LOGGER.exception(
+            "Unable to save repeater password for stable_id=%s", msg["stable_id"]
+        )
+        _send_password_storage_error(connection, msg["id"])
+        return
     connection.send_result(msg["id"], manager.public_settings(msg["stable_id"]))
 
 
@@ -391,11 +408,21 @@ async def websocket_remove_repeater_password(
     except RepeaterSettingsValidationError as err:
         _send_error(connection, msg["id"], err)
         return
+    except Exception:  # noqa: BLE001 - storage boundary must return a useful error
+        _LOGGER.exception(
+            "Unable to remove repeater password for stable_id=%s", msg["stable_id"]
+        )
+        _send_password_storage_error(connection, msg["id"])
+        return
     connection.send_result(msg["id"], manager.public_settings(msg["stable_id"]))
 
 
 def async_register_management_websockets(hass: HomeAssistant) -> None:
     """Register the administrator-only management API once."""
+    # Setup calls this before config-entry managers are constructed. Installing
+    # here keeps pure clock-manager unit tests unchanged while production uses
+    # the authenticated Home Assistant UTC workflow.
+    install_epoch_sync()
     for command in (
         websocket_get_repeater_settings,
         websocket_save_repeater_settings,
