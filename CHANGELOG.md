@@ -1,9 +1,79 @@
 # Changelog
 
-All notable changes to MeshCore NOC will be documented in this file.
+All notable changes to MeshCore NOC are documented here. The format follows
+Keep a Changelog and the project uses Semantic Versioning.
 
-The format is based on Keep a Changelog, and versioning follows Semantic
-Versioning.
+## [1.1.0] - 2026-08-11
+
+### Added
+
+- Password-authenticated per-repeater and fleet clock checks from Mission
+  Control.
+- Per-repeater private administrator-password storage behind Home Assistant's
+  administrator-only management API.
+- Authenticated single-repeater and fleet clock synchronisation using Home
+  Assistant UTC as the authoritative time source.
+- Automatic fleet clock checks and optional automatic fleet synchronisation.
+- Companion-clock recovery for ahead-running companion nodes whose future
+  contact `lastmod` values would otherwise reseed the wrong RTC after reboot.
+- Anti-replay recovery for repeaters stranded by an earlier future companion
+  timestamp.
+- Route-aware login/command waits based on MeshCore `suggested_timeout` rather
+  than a fixed timeout for every repeater.
+- Measured clock-command RTT and latency-compensated clock offset calculation.
+- Latency-compensated outbound clock-sync timestamp for routed repeaters.
+- Per-repeater display name, voltage calibration, battery thresholds, freshness
+  thresholds and clock thresholds in Mission Control.
+- Fleet severity colouring that uses the worst current availability/health,
+  battery and clock condition.
+- Interactive Recorder-backed voltage graph with 6 h, 24 h, 7 d and 30 d
+  ranges, x-axis time labels, current values, period change, series hide/show
+  controls and crosshair values.
+
+### Changed
+
+- Clock Check now requires the saved repeater administrator password; anonymous
+  clock reads are no longer the normal operator check path.
+- Direct and multi-hop repeaters use the timing window returned by the actual
+  MeshCore transmission, preventing routed nodes from being declared timed out
+  while a valid response is still in flight.
+- Clock synchronisation performs an authenticated, latency-aware pre-check and
+  leaves repeaters inside ±30 seconds untouched; no reboot or clock write is
+  performed for an already-synchronised repeater.
+- Automatic clock synchronisation refuses to start unattended if any managed
+  repeater is missing its saved administrator password.
+- Obsolete manual clock-check cooldown, success-delay, failure-delay and
+  rotating-start controls are no longer exposed in the v1.1 options UI.
+- The Mission Control graph refreshes Recorder history in the background and
+  keeps the last good plot visible while data is loading.
+- A temporary history refresh error now retains the last good graph instead of
+  replacing it with an empty/loading state.
+- Large instantaneous recorder/calibration jumps are rendered as a visual break
+  instead of a misleading vertical voltage event.
+- Development update metadata is aligned with the active `v1.1-clock-sync`
+  branch while Stable continues to consume non-prerelease GitHub Releases.
+
+### Fixed
+
+- Companion clocks that could not move backwards through normal `set_time` can
+  be repaired remotely without deleting contacts or factory-resetting the
+  companion.
+- Repeater CLI replay protection no longer strands clock operations after an
+  ahead-running companion has been corrected.
+- Routed repeater checks no longer rely on an 8-second fixed response window.
+- Radio travel time is no longer reported entirely as repeater RTC drift.
+- Fleet status bars, dots and repeater names now use warning/degraded/critical
+  colours instead of being overridden by a generic white foreground rule.
+- Repeated Home Assistant state updates no longer make the graph visibly die and
+  reload when its one-minute Recorder refresh starts.
+
+### Security
+
+- Repeater passwords remain backend-only private values. They are not returned
+  by reads, exposed through entities or diagnostics, or included in normal
+  command transcripts/logs.
+- Automatic sync requires credentials for every target before an unattended run
+  is allowed to start.
 
 ## [1.1.0-beta8]
 
